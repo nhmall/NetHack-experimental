@@ -29,13 +29,11 @@
 #include "mkroom.h"
 #include "obj.h"
 #include "quest.h"
-#include "rect.h"
 #include "region.h"
 #include "rm.h"
 #include "selvar.h"
 #include "sndprocs.h"
 #include "spell.h"
-#include "sym.h"
 #include "sys.h"
 #include "timeout.h"
 #include "winprocs.h"
@@ -442,6 +440,7 @@ enum earlyarg {
 #endif
     , ARG_DUMPGLYPHIDS
     , ARG_DUMPMONGEN
+    , ARG_DUMPWEIGHTS
 #ifdef WIN32
     , ARG_WINDOWS
 #endif
