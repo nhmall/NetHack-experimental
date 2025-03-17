@@ -49,6 +49,7 @@ staticfn void move_update(boolean);
 staticfn int pickup_checks(void);
 staticfn void maybe_wail(void);
 staticfn boolean water_turbulence(coordxy *, coordxy *);
+staticfn int QSORTCALLBACK cmp_weights(const void *, const void *);
 
 #define IS_SHOP(x) (svr.rooms[x].rtype >= SHOPBASE)
 
@@ -787,7 +788,7 @@ still_chewing(coordxy x, coordxy y)
         lev->typ = CORR;
     }
 
-    unblock_point(x, y); /* vision */
+    recalc_block_point(x, y); /* vision */
     newsym(x, y);
     if (digtxt)
         You1(digtxt); /* after newsym */
@@ -1956,9 +1957,11 @@ domove_attackmon_at(
                                    && bad_rock(gy.youmonst.data, x, u.uy0))))
                       && goodpos(u.ux0, u.uy0, mtmp, GP_ALLOW_U));
         /* if not displacing, try to attack; note that it might evade;
-           also, we don't attack tame when _safepet_ */
-        if (!*displaceu && do_attack(mtmp))
-            return TRUE;
+           also, we don't attack tame or peaceful when safemon() */
+        if (!*displaceu) {
+            if (do_attack(mtmp))
+                return TRUE;
+        }
     }
     return FALSE;
 }
@@ -2696,119 +2699,122 @@ domove_core(void)
             return;
     }
 
-    if (domove_fight_ironbars(x, y))
-        return;
+    if (!displaceu) {
 
-    if (domove_fight_web(x, y))
-        return;
+        if (domove_fight_ironbars(x, y))
+            return;
 
-    if (domove_fight_empty(x, y))
-        return;
+        if (domove_fight_web(x, y))
+            return;
 
-    (void) unmap_invisible(x, y);
-    /* not attacking an animal, so we try to move */
-    if ((u.dx || u.dy) && u.usteed && stucksteed(FALSE)) {
-        nomul(0);
-        return;
-    }
+        if (domove_fight_empty(x, y))
+            return;
 
-    if (u_rooted())
-        return;
-
-    /* treat entering a visible gas cloud region like entering a trap;
-       there could be a known trap as well as a region at the target spot;
-       if so, ask about entring the region first; even though this could
-       lead to two consecutive confirmation prompts, the situation seems to
-       be too uncommon to warrant a separate case with combined trap+region
-       confirmation */
-    if (ParanoidTrap && !Blind && !Stunned && !Confusion && !Hallucination
-        /* skip if player used 'm' prefix or is moving recklessly */
-        && (!svc.context.nopick || svc.context.run)
-        /* check for region(s) */
-        && (newreg = visible_region_at(x, y)) != 0
-        && ((oldreg = visible_region_at(u.ux, u.uy)) == 0
-            /* if moving from one region into another, only ask for
-               confirmation if the one potentially being entered inflicts
-               damage (poison gas) and the one being exited doesn't (vapor) */
-            || (reg_damg(newreg) > 0 && reg_damg(oldreg) == 0))
-        /* check whether attempted move will be viable */
-        && test_move(u.ux, u.uy, u.dx, u.dy, TEST_MOVE)
-        /* we don't override confirmation for poison resistance since the
-           region also hinders hero's vision even if/when no damage is done */
-        ) {
-        char qbuf[QBUFSZ];
-
-        Snprintf(qbuf, sizeof qbuf, "%s into that %s cloud?",
-                 u_locomotion("step"),
-                 (reg_damg(newreg) > 0) ? "poison gas" : "vapor");
-        if (!paranoid_query(ParanoidConfirm, upstart(qbuf))) {
+        (void) unmap_invisible(x, y);
+        /* not attacking an animal, so we try to move */
+        if ((u.dx || u.dy) && u.usteed && stucksteed(FALSE)) {
             nomul(0);
-            svc.context.move = 0;
             return;
         }
-    }
-    /* maybe ask player for confirmation before walking into known traps */
-    if (ParanoidTrap && !Stunned && !Confusion
-        /* skip if player used 'm' prefix or is moving recklessly */
-        && (!svc.context.nopick || svc.context.run)
-        /* check for discovered trap */
-        && (trap = t_at(x, y)) != 0 && trap->tseen
-        /* check whether attempted move will be viable */
-    /*
-     * FIXME:
-     *  this will result in "Really step into trap?" if there is a
-     *  peaceful or tame monster already there.
-     */
-        && test_move(u.ux, u.uy, u.dx, u.dy, TEST_MOVE)
-        /* override confirmation if the trap is harmless to the hero */
-        && (immune_to_trap(&gy.youmonst, trap->ttyp) != TRAP_CLEARLY_IMMUNE
-            /* Hallucination: all traps still show as ^, but the
-               hero can't tell what they are, so treat as dangerous */
-            || Hallucination)) {
-        char qbuf[QBUFSZ];
-        int traptype = (Hallucination ? rnd(TRAPNUM - 1) : (int) trap->ttyp);
-        boolean into = into_vs_onto(traptype);
 
-        Snprintf(qbuf, sizeof qbuf, "Really %s %s that %s?",
-                 u_locomotion("step"), into ? "into" : "onto",
-                 defsyms[trap_to_defsym(traptype)].explanation);
-        /* handled like paranoid_confirm:pray; when paranoid_confirm:trap
-           isn't set, don't ask at all but if it is set (checked above),
-           ask via y/n if parnoid_confirm:confirm isn't also set or via
-           yes/no if it is */
-        if (!paranoid_query(ParanoidConfirm, qbuf)) {
-            nomul(0);
-            svc.context.move = 0;
+        if (u_rooted())
+            return;
+
+        /* treat entering a visible gas cloud region like entering a trap;
+           there could be a known trap as well as a region at the target spot;
+           if so, ask about entring the region first; even though this could
+           lead to two consecutive confirmation prompts, the situation seems
+           to be too uncommon to warrant a separate case with combined
+           trap+region confirmation */
+        if (ParanoidTrap && !Blind && !Stunned && !Confusion && !Hallucination
+            /* skip if player used 'm' prefix or is moving recklessly */
+            && (!svc.context.nopick || svc.context.run)
+            /* check for region(s) */
+            && (newreg = visible_region_at(x, y)) != 0
+            && ((oldreg = visible_region_at(u.ux, u.uy)) == 0
+                /* if moving from one region into another, only ask for
+                   confirmation if the one potentially being entered inflicts
+                   damage (poison gas) and the one being exited doesn't
+                   (vapor) */
+                || (reg_damg(newreg) > 0 && reg_damg(oldreg) == 0))
+            /* check whether attempted move will be viable */
+            && test_move(u.ux, u.uy, u.dx, u.dy, TEST_MOVE)
+            /* we don't override confirmation for poison resistance since
+               the region also hinders hero's vision even if/when no damage
+               is done */
+            ) {
+            char qbuf[QBUFSZ];
+
+            Snprintf(qbuf, sizeof qbuf, "%s into that %s cloud?",
+                     u_locomotion("step"),
+                     (reg_damg(newreg) > 0) ? "poison gas" : "vapor");
+            if (!paranoid_query(ParanoidConfirm, upstart(qbuf))) {
+                nomul(0);
+                svc.context.move = 0;
+                return;
+            }
+        }
+        /* maybe ask player for confirmation before walking into known trap */
+        if (ParanoidTrap && !Stunned && !Confusion
+            /* skip if player used 'm' prefix or is moving recklessly */
+            && (!svc.context.nopick || svc.context.run)
+            /* check for discovered trap */
+            && (trap = t_at(x, y)) != 0 && trap->tseen
+            /* check whether attempted move will be viable */
+            && test_move(u.ux, u.uy, u.dx, u.dy, TEST_MOVE)
+            /* override confirmation if the trap is harmless to the hero */
+            && (immune_to_trap(&gy.youmonst, trap->ttyp) != TRAP_CLEARLY_IMMUNE
+                /* Hallucination: all traps still show as ^, but the
+                   hero can't tell what they are, so treat as dangerous */
+                || Hallucination)) {
+            char qbuf[QBUFSZ];
+            int traptype = (Hallucination ? rnd(TRAPNUM - 1)
+                                          : (int) trap->ttyp);
+            boolean into = into_vs_onto(traptype);
+
+            Snprintf(qbuf, sizeof qbuf, "Really %s %s that %s?",
+                     u_locomotion("step"), into ? "into" : "onto",
+                     defsyms[trap_to_defsym(traptype)].explanation);
+            /* handled like paranoid_confirm:pray; when paranoid_confirm:trap
+               isn't set, don't ask at all but if it is set (checked above),
+               ask via y/n if parnoid_confirm:confirm isn't also set or via
+               yes/no if it is */
+            if (!paranoid_query(ParanoidConfirm, qbuf)) {
+                nomul(0);
+                svc.context.move = 0;
+                return;
+            }
+        }
+
+        if (u.utrap) { /* when u.utrap is True, displaceu is False */
+            boolean moved = trapmove(x, y, trap);
+
+            if (!u.utrap) {
+                disp.botl = TRUE;
+                reset_utrap(TRUE); /* might resume levitation or flight */
+            }
+            /* might not have escaped, or did escape but remain in the same
+               spot */
+            if (!moved)
+                return;
+        }
+
+        if (!test_move(u.ux, u.uy, x - u.ux, y - u.uy, DO_MOVE)) {
+            if (!svc.context.door_opened) {
+                svc.context.move = 0;
+                nomul(0);
+            }
             return;
         }
-    }
 
-    if (u.utrap) {
-        boolean moved = trapmove(x, y, trap);
-
-        if (!u.utrap) {
-            disp.botl = TRUE;
-            reset_utrap(TRUE); /* might resume levitation or flight */
-        }
-        /* might not have escaped, or did escape but remain in same spot */
-        if (!moved)
-            return;
-    }
-
-    if (!test_move(u.ux, u.uy, x - u.ux, y - u.uy, DO_MOVE)) {
-        if (!svc.context.door_opened) {
+        /* Is it dangerous to swim in water or lava? */
+        if (swim_move_danger(x, y)) {
             svc.context.move = 0;
             nomul(0);
+            return;
         }
-        return;
-    }
 
-    /* Is it dangerous to swim in water or lava? */
-    if (swim_move_danger(x, y)) {
-        svc.context.move = 0;
-        nomul(0);
-        return;
-     }
+    } /* !dislacedu */
 
     /* Move ball and chain.  */
     if (Punished)
@@ -4286,6 +4292,102 @@ check_capacity(const char *str)
         return 1;
     }
     return 0;
+}
+
+struct weight_table_entry {
+    unsigned wtyp; /* 1 = monst, 2 = obj */
+    const char *nm; /* 0-6 = weight in ascii; 7 - end = name */
+    int wt, idx;
+    boolean unique;
+};
+
+static struct weight_table_entry *weightlist;
+
+void
+dump_weights(void)
+{
+    int i, cnt = 0, nmwidth = 49, mcount = NUMMONS, ocount = NUM_OBJECTS;
+    char nmbuf[BUFSZ], nmbufbase[BUFSZ];
+
+    weightlist = (struct weight_table_entry *) alloc(sizeof(struct weight_table_entry)
+                                               * (mcount + ocount));
+    decl_globals_init();
+    init_objects();
+    for (i = 0; i < mcount; ++i) {
+        if (i != PM_LONG_WORM_TAIL) {
+            boolean cm;
+
+            weightlist[cnt].wt = (int) mons[i].cwt;
+            weightlist[cnt].idx = i;
+            weightlist[cnt].wtyp = 1;
+            weightlist[cnt].unique = ((mons[i].geno & G_UNIQ) != 0);
+            Snprintf(nmbuf, sizeof nmbuf, "%07u", weightlist[cnt].wt);
+            cm = CapitalMon(mons[i].pmnames[NEUTRAL]);
+            Snprintf(&nmbuf[7], sizeof nmbuf - 7, "%s%s", "the body of ",
+                     (cm)                     ? the(mons[i].pmnames[NEUTRAL])
+                     : weightlist[cnt].unique ? mons[i].pmnames[NEUTRAL]
+                                              : an(mons[i].pmnames[NEUTRAL]));
+            weightlist[cnt].nm = dupstr(nmbuf);
+            cnt++;
+        }
+    }
+    for (i = 0; i < ocount; ++i) {
+        int wt = (int) objects[i].oc_weight;
+
+        if (wt && i != SLIME_MOLD && obj_descr[i].oc_name) {
+            weightlist[cnt].idx = i;
+            weightlist[cnt].wt = wt;
+            weightlist[cnt].wtyp = 2;
+            weightlist[cnt].wt = wt;
+            weightlist[cnt].unique = (objects[i].oc_unique != 0);
+            Snprintf(
+                nmbufbase, sizeof nmbufbase, "%s%s",
+                objects[weightlist[cnt].idx].oc_class == POTION_CLASS
+                    ? "potion of "
+                : objects[weightlist[cnt].idx].oc_class == WAND_CLASS
+                    ? "wand of "
+                : objects[weightlist[cnt].idx].oc_class == SCROLL_CLASS
+                    ? "scroll of "
+                : objects[weightlist[cnt].idx].oc_class == RING_CLASS
+                    ? "ring of "
+                : (objects[weightlist[cnt].idx].oc_class == SPBOOK_CLASS
+                    && objects[weightlist[cnt].idx].oc_name_idx != SPE_BOOK_OF_THE_DEAD)
+                    ? "spellbook of "
+                    : "",
+               obj_descr[weightlist[cnt].idx].oc_name);
+            Snprintf(nmbuf, sizeof nmbuf, "%07u", wt);
+            Snprintf(&nmbuf[7], sizeof nmbuf - 7, "%s",
+                        (weightlist[cnt].unique) ? the(nmbufbase)
+                                            : an(nmbufbase));
+            weightlist[cnt].nm = dupstr(nmbuf);
+            cnt++;
+        }
+    }
+    qsort((genericptr_t) weightlist, cnt,
+          sizeof (struct weight_table_entry), cmp_weights);
+    raw_printf("int all_weights[] = {");
+    for (i = 0; i < cnt; ++i) {
+        if (weightlist[i].nm) {
+            raw_printf("    %7u%s /* %*s */", weightlist[i].wt,
+                       (i == cnt - 1) ? " " : ",", -nmwidth,
+                       &weightlist[i].nm[7]);
+            free((genericptr_t) weightlist[i].nm), weightlist[i].nm = 0;
+        }
+    }
+    raw_print("};");
+    raw_print("");
+    free((genericptr_t) weightlist);
+    freedynamicdata();
+}
+
+staticfn int QSORTCALLBACK
+cmp_weights(const void *p1, const void *p2)
+{
+    struct weight_table_entry *i1 = (struct weight_table_entry *) p1,
+                              *i2 = (struct weight_table_entry *) p2;
+
+   /* return (i1->wt - i2->wt); */
+    return strcmp(i1->nm, i2->nm);
 }
 
 int
