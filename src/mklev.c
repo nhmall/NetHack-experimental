@@ -763,7 +763,7 @@ makeniche(int trap_type)
                         ttmp->once = 1;
                     if (trap_engravings[trap_type]) {
                         make_engr_at(xx, yy - dy,
-                                     trap_engravings[trap_type], 0L,
+                                     trap_engravings[trap_type], NULL, 0L,
                                      DUST);
                         wipe_engr_at(xx, yy - dy, 5,
                                      FALSE); /* age it a little */
@@ -773,9 +773,9 @@ makeniche(int trap_type)
             dosdoor(xx, yy, aroom, SDOOR);
         } else {
             rm->typ = CORR;
-            if (rn2(7))
+            if (rn2(7)) {
                 dosdoor(xx, yy, aroom, rn2(5) ? SDOOR : DOOR);
-            else {
+            } else {
                 /* inaccessible niches occasionally have iron bars */
                 if (!rn2(5) && IS_WALL(levl[xx][yy].typ)) {
                     (void) set_levltyp(xx, yy, IRONBARS);
@@ -1136,8 +1136,8 @@ fill_ordinary_room(
 
     /* maybe make some graffiti */
     if (!rn2(27 + 3 * abs(depth(&u.uz)))) {
-        char buf[BUFSZ];
-        const char *mesg = random_engraving(buf);
+        char buf[BUFSZ], pristinebuf[BUFSZ];
+        const char *mesg = random_engraving(buf, pristinebuf);
 
         if (mesg) {
             do {
@@ -1146,7 +1146,7 @@ fill_ordinary_room(
                 y = pos.y;
             } while (levl[x][y].typ != ROOM && !rn2(40));
             if (levl[x][y].typ == ROOM)
-                make_engr_at(x, y, mesg, 0L, MARK);
+                make_engr_at(x, y, mesg, pristinebuf, 0L, MARK);
         }
     }
 
@@ -1184,8 +1184,8 @@ themerooms_post_level_generate(void)
     iflags.in_lua = gi.in_mk_themerooms = FALSE;
 
     wallification(1, 0, COLNO - 1, ROWNO - 1);
-    free(gc.coder);
-    gc.coder = NULL;
+    if (gc.coder)
+        free(gc.coder), gc.coder = NULL;
     lua_gc(themes, LUA_GCCOLLECT);
 }
 
