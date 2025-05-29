@@ -67,6 +67,10 @@
  *
  */
 
+#ifndef ARTIFACT_H
+#include "artifact.h"
+#endif
+
 /* ### alloc.c ### */
 
 #if 0
@@ -183,6 +187,7 @@ extern void mkot_trap_warn(void);
 extern boolean is_magic_key(struct monst *, struct obj *);
 extern struct obj *has_magic_key(struct monst *);
 extern boolean is_art(struct obj *, int);
+extern boolean permapoisoned(struct obj *);
 
 /* ### attrib.c ### */
 
@@ -304,6 +309,28 @@ extern int phase_of_the_moon(void);
 extern boolean friday_13th(void);
 extern int night(void);
 extern int midnight(void);
+
+/* ### cfgfiles.c ### */
+
+#if !defined(CROSSCOMPILE) || defined(CROSSCOMPILE_TARGET)
+extern int l_get_config_errors(lua_State *) NONNULLARG1;
+#endif
+extern int do_write_config_file(void);
+extern boolean parse_config_line(char *) NONNULLARG1;
+#ifdef USER_SOUNDS
+extern boolean can_read_file(const char *) NONNULLARG1;
+#endif
+extern void config_error_init(boolean, const char *, boolean);
+extern void config_erradd(const char *);
+extern int config_error_done(void);
+/* arg1 of read_config_file can be NULL to pass through
+ * to fopen_config_file() to mean 'use the default config file name' */
+extern boolean read_config_file(const char *, int);
+extern boolean parse_conf_str(const char *str, boolean (*proc)(char *));
+extern boolean parse_conf_file(FILE *fp, boolean (*proc)(char *arg));
+extern void set_configfile_name(const char *);
+extern char *get_configfile(void);
+extern const char *get_default_configfile(void);
 
 /* ### coloratt.c ### */
 
@@ -948,7 +975,7 @@ extern char *build_english_list(char *) NONNULLARG1;
 
 /* ### engrave.c ### */
 
-extern char *random_engraving(char *) NONNULLARG1;
+extern char *random_engraving(char *, char *) NONNULLARG12;
 extern void wipeout_text(char *, int, unsigned) NONNULLARG1;
 extern boolean can_reach_floor(boolean);
 extern void cant_reach_floor(coordxy, coordxy, boolean, boolean);
@@ -957,7 +984,7 @@ extern struct engr *sengr_at(const char *, coordxy, coordxy, boolean) NONNULLARG
 extern void u_wipe_engr(int);
 extern void wipe_engr_at(coordxy, coordxy, xint16, boolean);
 extern void read_engr_at(coordxy, coordxy);
-extern void make_engr_at(coordxy, coordxy, const char *, long, int) NONNULLARG3;
+extern void make_engr_at(coordxy, coordxy, const char *, const char *, long, int) NONNULLARG3;
 extern void del_engr_at(coordxy, coordxy);
 extern int freehand(void);
 extern int doengrave(void);
@@ -1004,9 +1031,6 @@ extern void makerogueghost(void);
 /* ### files.c ### */
 
 extern const char *nh_basename(const char *, boolean) NONNULLARG1;
-#if !defined(CROSSCOMPILE) || defined(CROSSCOMPILE_TARGET)
-extern int l_get_config_errors(lua_State *) NONNULLARG1;
-#endif
 extern char *fname_encode(const char *, char,
                           char *, char *, int) NONNULLPTRS;
 extern char *fname_decode(char, char *, char *, int) NONNULLPTRS;
@@ -1044,22 +1068,14 @@ extern char **get_saved_games(void);
 extern void free_saved_games(char **);
 extern void nh_compress(const char *);
 extern void nh_uncompress(const char *);
+extern void nh_sfconvert(const char *);
+extern void nh_sfunconvert(const char *);
+extern int delete_convertedfile(const char *);
+extern void free_convert_filenames(void);
 extern boolean lock_file(const char *, int, int) NONNULLARG1;
 extern void unlock_file(const char *) NONNULLARG1;
-extern int do_write_config_file(void);
-extern boolean parse_config_line(char *) NONNULLARG1;
-#ifdef USER_SOUNDS
-extern boolean can_read_file(const char *) NONNULLARG1;
-#endif
-extern void config_error_init(boolean, const char *, boolean);
-extern void config_erradd(const char *);
-extern int config_error_done(void);
-/* arg1 of read_config_file can be NULL to pass through
- * to fopen_config_file() to mean 'use the default config file name' */
-extern boolean read_config_file(const char *, int);
 extern void check_recordfile(const char *);
 extern void read_wizkit(void);
-extern boolean parse_conf_str(const char *str, boolean (*proc)(char *));
 extern int read_sym_file(int);
 extern void paniclog(const char *, const char *) NONNULLPTRS;
 extern void testinglog(const char *, const char *, const char *);
@@ -1081,6 +1097,7 @@ extern boolean read_tribute(const char *, const char *, int, char *, int,
 extern boolean Death_quote(char *, int) NONNULLARG1;
 extern void livelog_add(long ll_type, const char *) NONNULLARG2;
 ATTRNORETURN extern void do_deferred_showpaths(int) NORETURN;
+extern boolean contains_directory(const char *);
 
 /* ### fountain.c ### */
 
@@ -1619,6 +1636,8 @@ extern void costly_alteration(struct obj *, int) NONNULLARG1;
 extern void clear_dknown(struct obj *);
 extern void unknow_object(struct obj *);
 extern struct obj *mksobj(int, boolean, boolean) NONNULL;
+extern boolean stone_object_type(unsigned);
+extern boolean stone_furniture_type(unsigned);
 extern int bcsign(struct obj *) NONNULLARG1;
 extern int weight(struct obj *) NONNULLARG1;
 extern struct obj *mkgold(long, coordxy, coordxy);
@@ -1955,6 +1974,7 @@ extern int dosuspend(void);
 extern void nt_regularize(char *);
 extern int(*nt_kbhit)(void);
 extern void Delay(int);
+boolean get_user_home_folder(char *, size_t);
 # ifdef CRASHREPORT
 struct CRctxt;
 extern struct CRctxt *ctxp;
@@ -2659,12 +2679,16 @@ extern void get_plname_from_file(NHFILE *, char *, boolean) NONNULLARG12;
 #ifdef SELECTSAVED
 extern int restore_menu(winid);
 #endif
-extern void minit(void);
 extern boolean lookup_id_mapping(unsigned, unsigned *) NONNULLARG2;
-extern int validate(NHFILE *, const char *, boolean) NONNULLARG1;
 /* extern void reset_restpref(void); */
 /* extern void set_restpref(const char *); */
 /* extern void set_savepref(const char *); */
+#ifdef SFCTOOL
+void rest_bubbles(NHFILE *);
+void restore_gamelog(NHFILE *);
+boolean restgamestate(NHFILE *);
+void restore_msghistory(NHFILE *);
+#endif
 
 /* ### rip.c ### */
 
@@ -2810,11 +2834,7 @@ extern void bufoff(int);
 extern void bflush(int);
 extern void bwrite(int, const genericptr_t, unsigned) NONNULLARG2;
 extern void mread(int, genericptr_t, unsigned) NONNULLARG2;
-extern void minit(void);
 extern void bclose(int);
-#if defined(ZEROCOMP)
-extern void zerocomp_bclose(int);
-#endif
 
 /* ### shk.c ### */
 
@@ -3123,6 +3143,7 @@ extern int collect_coords(coord *, coordxy, coordxy, int, unsigned,
                           boolean (*)(coordxy, coordxy)) NONNULLARG1;
 extern boolean safe_teleds(int);
 extern boolean teleport_pet(struct monst *, boolean) NONNULLARG1;
+extern void tele_to_rnd_pet(void);
 extern void tele(void);
 extern void scrolltele(struct obj *) NO_NNARGS;
 extern int dotelecmd(void);
@@ -3384,7 +3405,7 @@ extern boolean mhitm_knockback(struct monst *, struct monst *,struct attack *,
 extern int passive(struct monst *, struct obj *, boolean, boolean, uchar,
                    boolean) NONNULLARG1;
 extern void passive_obj(struct monst *, struct obj *, struct attack *) NONNULLARG1;
-extern void that_is_a_mimic(struct monst *, boolean) NONNULLARG1;
+extern void that_is_a_mimic(struct monst *, unsigned) NONNULLARG1;
 extern void stumble_onto_mimic(struct monst *) NONNULLARG1;
 extern int flash_hits_mon(struct monst *, struct obj *) NONNULLARG12;
 extern void light_hits_gremlin(struct monst *, int) NONNULLARG1;
@@ -3485,14 +3506,17 @@ extern boolean comp_times(long);
 #endif
 extern boolean check_version(struct version_info *, const char *, boolean,
                              unsigned long) NONNULLARG1;
-extern boolean uptodate(NHFILE *, const char *, unsigned long) NONNULLARG1;
-extern void store_formatindicator(NHFILE *) NONNULLARG1;
+extern int uptodate(NHFILE *, const char *, unsigned long) NONNULLARG1;
 extern void store_version(NHFILE *) NONNULLARG1;
 extern unsigned long get_feature_notice_ver(char *) NO_NNARGS;
 extern unsigned long get_current_feature_ver(void);
 extern const char *copyright_banner_line(int) NONNULL;
 extern void early_version_info(boolean);
 extern void dump_version_info(void);
+extern void store_critical_bytes(NHFILE *) NONNULLARG1;
+extern int compare_critical_bytes(NHFILE *, int *, unsigned long) NONNULLARG1;
+extern int get_critical_size_count(void);
+extern int validate(NHFILE *, const char *, boolean) NONNULLARG1;
 
 /* ### video.c ### */
 

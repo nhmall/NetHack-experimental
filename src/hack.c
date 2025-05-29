@@ -38,6 +38,7 @@ staticfn boolean impaired_movement(coordxy *, coordxy *) NONNULLPTRS;
 staticfn boolean avoid_moving_on_trap(coordxy, coordxy, boolean);
 staticfn boolean avoid_moving_on_liquid(coordxy, coordxy, boolean);
 staticfn boolean avoid_running_into_trap_or_liquid(coordxy, coordxy);
+staticfn boolean avoid_trap_andor_region(coordxy, coordxy);
 staticfn boolean move_out_of_bounds(coordxy, coordxy);
 staticfn boolean carrying_too_much(void);
 staticfn boolean escape_from_sticky_mon(coordxy, coordxy);
@@ -135,7 +136,8 @@ revive_nasty(coordxy x, coordxy y, const char *msg)
     return revived;
 }
 
-#define squeezeablylightinvent() (!gi.invent || inv_weight() <= -850)
+#define squeezeablylightinvent() (!gi.invent \
+    || inv_weight() <= (WT_SQUEEZABLE_INV * -1))
 
 /* can hero move onto a spot containing one or more boulders?
    used for m<dir> and travel and during boulder push failure */
@@ -1726,22 +1728,25 @@ notice_all_mons(boolean reset)
         struct monst **arr = NULL;
         int j, i = 0, cnt = 0;
 
-        for (mtmp = fmon; mtmp; mtmp = mtmp->nmon)
+        for (mtmp = fmon; mtmp; mtmp = mtmp->nmon) {
+            if (DEADMONSTER(mtmp))
+                continue;
             if (canspotmon(mtmp))
                 cnt++;
             else if (reset)
                 mtmp->mspotted = FALSE;
-
+        }
         if (!cnt)
             return;
 
-        arr = (struct monst **) alloc(cnt * sizeof(struct monst *));
-
+        arr = (struct monst **) alloc(cnt * sizeof (struct monst *));
 
         for (mtmp = fmon; mtmp; mtmp = mtmp->nmon) {
+            if (DEADMONSTER(mtmp))
+                continue;
             if (!canspotmon(mtmp))
                 mtmp->mspotted = FALSE;
-            else if (!DEADMONSTER(mtmp) && i < cnt)
+            else if (i < cnt)
                 arr[i++] = mtmp;
         }
 
@@ -2480,6 +2485,79 @@ avoid_running_into_trap_or_liquid(coordxy x, coordxy y)
     return FALSE;
 }
 
+/* if paranoid_confirm:Trap is enabled, check whether the next step forward
+   needs player confirmation due to visible region or discovered trap;
+   result: True => stop moving, False => proceed */
+staticfn boolean
+avoid_trap_andor_region(coordxy x, coordxy y)
+{
+    char qbuf[QBUFSZ];
+    NhRegion *newreg, *oldreg;
+    struct trap *trap = NULL;
+
+    /* treat entering a visible gas cloud region like entering a trap;
+       there could be a known trap as well as a region at the target spot;
+       if so, ask about entring the region first; even though this could
+       lead to two consecutive confirmation prompts, the situation seems
+       to be too uncommon to warrant a separate case with combined
+       trap+region confirmation */
+    if (ParanoidTrap && !Blind && !Stunned && !Confusion && !Hallucination
+        /* skip if player used 'm' prefix or is moving recklessly */
+        && (!svc.context.nopick || svc.context.run)
+        /* check for region(s) */
+        && (newreg = visible_region_at(x, y)) != 0
+        && ((oldreg = visible_region_at(u.ux, u.uy)) == 0
+            /* if moving from one region into another, only ask for
+               confirmation if the one potentially being entered inflicts
+               damage (poison gas) and the one being exited doesn't (vapor) */
+            || (reg_damg(newreg) > 0 && reg_damg(oldreg) == 0))
+        /* check whether attempted move will be viable */
+        && test_move(u.ux, u.uy, u.dx, u.dy, TEST_MOVE)
+        /* we don't override confirmation for poison resistance since the
+           region also hinders hero's vision even if/when no damage is done */
+    ) {
+        Snprintf(qbuf, sizeof qbuf, "%s into that %s cloud?",
+                 u_locomotion("step"),
+                 (reg_damg(newreg) > 0) ? "poison gas" : "vapor");
+        if (!paranoid_query(ParanoidConfirm, upstart(qbuf))) {
+            nomul(0);
+            svc.context.move = 0;
+            return TRUE;
+        }
+    }
+
+    /* maybe ask player for confirmation before walking into known trap */
+    if (ParanoidTrap && !Stunned && !Confusion
+        /* skip if player used 'm' prefix or is moving recklessly */
+        && (!svc.context.nopick || svc.context.run)
+        /* check for discovered trap */
+        && (trap = t_at(x, y)) != 0 && trap->tseen
+        /* check whether attempted move will be viable */
+        && test_move(u.ux, u.uy, u.dx, u.dy, TEST_MOVE)
+        /* override confirmation if the trap is harmless to the hero */
+        && (immune_to_trap(&gy.youmonst, trap->ttyp) != TRAP_CLEARLY_IMMUNE
+            /* Hallucination: all traps still show as ^, but the
+               hero can't tell what they are, so treat as dangerous */
+            || Hallucination)) {
+        int traptype = (Hallucination ? rnd(TRAPNUM - 1) : (int) trap->ttyp);
+        boolean into = into_vs_onto(traptype);
+
+        Snprintf(qbuf, sizeof qbuf, "Really %s %s that %s?",
+                 u_locomotion("step"), into ? "into" : "onto",
+                 defsyms[trap_to_defsym(traptype)].explanation);
+        /* handled like paranoid_confirm:pray; when paranoid_confirm:trap
+           isn't set, don't ask at all but if it is set (checked above),
+           ask via y/n if parnoid_confirm:confirm isn't also set or via
+           yes/no if it is */
+        if (!paranoid_query(ParanoidConfirm, qbuf)) {
+            nomul(0);
+            svc.context.move = 0;
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
 /* trying to move out-of-bounds? */
 staticfn boolean
 move_out_of_bounds(coordxy x, coordxy y)
@@ -2561,14 +2639,6 @@ escape_from_sticky_mon(coordxy x, coordxy y)
              * guaranteed escape.
              */
             switch (rn2(!u.ustuck->mcanmove ? 8 : 40)) {
-            case 0:
-            case 1:
-            case 2:
- pull_free:
-                mtmp = u.ustuck;
-                set_ustuck((struct monst *) 0);
-                You("pull free from %s.", y_monnam(mtmp));
-                break;
             case 3:
                 if (!u.ustuck->mcanmove) {
                     /* it's free to move on next turn */
@@ -2578,11 +2648,20 @@ escape_from_sticky_mon(coordxy x, coordxy y)
                 FALLTHROUGH;
                 /*FALLTHRU*/
             default:
-                if (u.ustuck->mtame && !Conflict && !u.ustuck->mconf)
-                    goto pull_free;
-                You("cannot escape from %s!", y_monnam(u.ustuck));
-                nomul(0);
-                return TRUE;
+                if (Conflict || u.ustuck->mconf || !u.ustuck->mtame) {
+                    You("cannot escape from %s!", y_monnam(u.ustuck));
+                    nomul(0);
+                    return TRUE;
+                }
+                FALLTHROUGH;
+                /*FALLTHRU*/
+            case 0:
+            case 1:
+            case 2:
+                mtmp = u.ustuck;
+                set_ustuck((struct monst *) 0);
+                You("pull free from %s.", y_monnam(mtmp));
+                break;
             }
         }
     }
@@ -2611,9 +2690,7 @@ domove_core(void)
 {
     struct monst *mtmp;
     struct rm *tmpr;
-    NhRegion *newreg, *oldreg;
     coordxy x, y;
-    struct trap *trap = NULL;
     int glyph;
     coordxy chainx = 0, chainy = 0,
             ballx = 0, bally = 0;       /* ball&chain new positions */
@@ -2720,74 +2797,15 @@ domove_core(void)
         if (u_rooted())
             return;
 
-        /* treat entering a visible gas cloud region like entering a trap;
-           there could be a known trap as well as a region at the target spot;
-           if so, ask about entring the region first; even though this could
-           lead to two consecutive confirmation prompts, the situation seems
-           to be too uncommon to warrant a separate case with combined
-           trap+region confirmation */
-        if (ParanoidTrap && !Blind && !Stunned && !Confusion && !Hallucination
-            /* skip if player used 'm' prefix or is moving recklessly */
-            && (!svc.context.nopick || svc.context.run)
-            /* check for region(s) */
-            && (newreg = visible_region_at(x, y)) != 0
-            && ((oldreg = visible_region_at(u.ux, u.uy)) == 0
-                /* if moving from one region into another, only ask for
-                   confirmation if the one potentially being entered inflicts
-                   damage (poison gas) and the one being exited doesn't
-                   (vapor) */
-                || (reg_damg(newreg) > 0 && reg_damg(oldreg) == 0))
-            /* check whether attempted move will be viable */
-            && test_move(u.ux, u.uy, u.dx, u.dy, TEST_MOVE)
-            /* we don't override confirmation for poison resistance since
-               the region also hinders hero's vision even if/when no damage
-               is done */
-            ) {
-            char qbuf[QBUFSZ];
-
-            Snprintf(qbuf, sizeof qbuf, "%s into that %s cloud?",
-                     u_locomotion("step"),
-                     (reg_damg(newreg) > 0) ? "poison gas" : "vapor");
-            if (!paranoid_query(ParanoidConfirm, upstart(qbuf))) {
-                nomul(0);
-                svc.context.move = 0;
+        /* handling for paranoid_confirm:Trap which doubles as
+           paranoid_confirm:Region */
+        if (ParanoidTrap) {
+            if (avoid_trap_andor_region(x, y))
                 return;
-            }
-        }
-        /* maybe ask player for confirmation before walking into known trap */
-        if (ParanoidTrap && !Stunned && !Confusion
-            /* skip if player used 'm' prefix or is moving recklessly */
-            && (!svc.context.nopick || svc.context.run)
-            /* check for discovered trap */
-            && (trap = t_at(x, y)) != 0 && trap->tseen
-            /* check whether attempted move will be viable */
-            && test_move(u.ux, u.uy, u.dx, u.dy, TEST_MOVE)
-            /* override confirmation if the trap is harmless to the hero */
-            && (immune_to_trap(&gy.youmonst, trap->ttyp) != TRAP_CLEARLY_IMMUNE
-                /* Hallucination: all traps still show as ^, but the
-                   hero can't tell what they are, so treat as dangerous */
-                || Hallucination)) {
-            char qbuf[QBUFSZ];
-            int traptype = (Hallucination ? rnd(TRAPNUM - 1)
-                                          : (int) trap->ttyp);
-            boolean into = into_vs_onto(traptype);
-
-            Snprintf(qbuf, sizeof qbuf, "Really %s %s that %s?",
-                     u_locomotion("step"), into ? "into" : "onto",
-                     defsyms[trap_to_defsym(traptype)].explanation);
-            /* handled like paranoid_confirm:pray; when paranoid_confirm:trap
-               isn't set, don't ask at all but if it is set (checked above),
-               ask via y/n if parnoid_confirm:confirm isn't also set or via
-               yes/no if it is */
-            if (!paranoid_query(ParanoidConfirm, qbuf)) {
-                nomul(0);
-                svc.context.move = 0;
-                return;
-            }
         }
 
         if (u.utrap) { /* when u.utrap is True, displaceu is False */
-            boolean moved = trapmove(x, y, trap);
+            boolean moved = trapmove(x, y, (struct trap *) NULL);
 
             if (!u.utrap) {
                 disp.botl = TRUE;
@@ -4195,7 +4213,8 @@ weight_cap(void)
        functions enough in that situation to enhance carrying capacity */
     BLevitation &= ~I_SPECIAL;
 
-    carrcap = 25 * (ACURRSTR + ACURR(A_CON)) + 50;
+    carrcap = (WT_WEIGHTCAP_STRCON * (ACURRSTR + ACURR(A_CON)))
+               + WT_WEIGHTCAP_SPARE;
     if (Upolyd) {
         /* consistent with can_carry() in mon.c */
         if (gy.youmonst.data->mlet == S_NYMPH)
@@ -4216,9 +4235,9 @@ weight_cap(void)
             carrcap = MAX_CARR_CAP;
         if (!Flying) {
             if (EWounded_legs & LEFT_SIDE)
-                carrcap -= 100;
+                carrcap -= WT_WOUNDEDLEG_REDUCT;
             if (EWounded_legs & RIGHT_SIDE)
-                carrcap -= 100;
+                carrcap -= WT_WOUNDEDLEG_REDUCT;
         }
     }
 
@@ -4309,8 +4328,8 @@ dump_weights(void)
     int i, cnt = 0, nmwidth = 49, mcount = NUMMONS, ocount = NUM_OBJECTS;
     char nmbuf[BUFSZ], nmbufbase[BUFSZ];
 
-    weightlist = (struct weight_table_entry *) alloc(sizeof(struct weight_table_entry)
-                                               * (mcount + ocount));
+    weightlist = (struct weight_table_entry *)
+                alloc(sizeof (struct weight_table_entry) * (mcount + ocount));
     decl_globals_init();
     init_objects();
     for (i = 0; i < mcount; ++i) {
@@ -4332,33 +4351,20 @@ dump_weights(void)
         }
     }
     for (i = 0; i < ocount; ++i) {
+        const char *oc_name = (i == SLIME_MOLD) ? "slime mold"
+                              : obj_descr[i].oc_name;
         int wt = (int) objects[i].oc_weight;
 
-        if (wt && i != SLIME_MOLD && obj_descr[i].oc_name) {
+        if (wt && oc_name) {
             weightlist[cnt].idx = i;
             weightlist[cnt].wt = wt;
             weightlist[cnt].wtyp = 2;
-            weightlist[cnt].wt = wt;
             weightlist[cnt].unique = (objects[i].oc_unique != 0);
-            Snprintf(
-                nmbufbase, sizeof nmbufbase, "%s%s",
-                objects[weightlist[cnt].idx].oc_class == POTION_CLASS
-                    ? "potion of "
-                : objects[weightlist[cnt].idx].oc_class == WAND_CLASS
-                    ? "wand of "
-                : objects[weightlist[cnt].idx].oc_class == SCROLL_CLASS
-                    ? "scroll of "
-                : objects[weightlist[cnt].idx].oc_class == RING_CLASS
-                    ? "ring of "
-                : (objects[weightlist[cnt].idx].oc_class == SPBOOK_CLASS
-                    && objects[weightlist[cnt].idx].oc_name_idx != SPE_BOOK_OF_THE_DEAD)
-                    ? "spellbook of "
-                    : "",
-               obj_descr[weightlist[cnt].idx].oc_name);
-            Snprintf(nmbuf, sizeof nmbuf, "%07u", wt);
-            Snprintf(&nmbuf[7], sizeof nmbuf - 7, "%s",
-                        (weightlist[cnt].unique) ? the(nmbufbase)
-                                            : an(nmbufbase));
+            objects[i].oc_name_known = 1;
+            Strcpy(nmbufbase, simple_typename(i));
+            Snprintf(nmbuf, sizeof nmbuf, "%07u%s", wt,
+                     (weightlist[cnt].unique) ? the(nmbufbase)
+                                              : an(nmbufbase));
             weightlist[cnt].nm = dupstr(nmbuf);
             cnt++;
         }

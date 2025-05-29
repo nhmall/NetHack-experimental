@@ -275,7 +275,7 @@ flooreffects(
          * noise.  Stuff dropped near fountains always misses */
         if ((Blind || (Levitation || Flying)) && !Deaf && u_at(x, y)) {
             if (!Underwater) {
-                if (weight(obj) > 9) {
+                if (weight(obj) > WT_SPLASH_THRESHOLD) {
                     pline("Splash!");
                 } else if (Levitation || Flying) {
                     pline("Plop!");
@@ -1708,7 +1708,6 @@ goto_level(
         }
         reseed_random(rn2);
         reseed_random(rn2_on_display_rng);
-        minit(); /* ZEROCOMP */
         getlev(nhfp, svh.hackpid, new_ledger);
         close_nhfile(nhfp);
         oinit(); /* reassign level dependent obj probabilities */

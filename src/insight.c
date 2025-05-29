@@ -2580,7 +2580,7 @@ show_gamelog(int final)
             continue;
         if (!eventcnt++)
             putstr(win, 0, " Turn");
-        Sprintf(buf, "%5ld: %s", llmsg->turn, llmsg->text);
+        Snprintf(buf, sizeof buf, "%5ld: %s", llmsg->turn, llmsg->text);
         putstr(win, 0, buf);
     }
     /* since start of game is logged as a major event, 'eventcnt' should
@@ -3046,12 +3046,14 @@ list_genocided(char defquery, boolean ask)
     ngone = num_gone(mvflags, mindx);
 
     /* genocided or extinct species list */
-    if (ngenocided != 0 || nextinct != 0) {
+    if (ngone > 0) {
         Sprintf(buf, "Do you want a list of %sspecies%s%s?",
                 (nextinct && !ngenocided) ? "extinct " : "",
                 (ngenocided) ? " genocided" : "",
                 (nextinct && ngenocided) ? " and extinct" : "");
-        c = ask ? yn_function(buf, ynaqchars, defquery, TRUE) : defquery;
+        c = ask ? yn_function(buf, (ngone > 1) ? "ynaq" : "ynq\033a",
+                              defquery, TRUE)
+                : defquery;
         if (c == 'q')
             done_stopprint++;
         if (c == 'y' || c == 'a') {

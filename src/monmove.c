@@ -738,17 +738,8 @@ dochug(struct monst *mtmp)
         return 0;
     }
 
-    /* Erinyes will inform surrounding monsters of your crimes */
-    if (mdat == &mons[PM_ERINYS] && !mtmp->mpeaceful && m_canseeu(mtmp))
-        aggravate();
-
-    /* Shriekers and Medusa have irregular abilities which must be
-       checked every turn. These abilities do not cost a turn when
-       used. */
-    if (mdat->msound == MS_SHRIEK && !um_dist(mtmp->mx, mtmp->my, 1))
-        m_respond(mtmp);
-    if (mdat == &mons[PM_MEDUSA] && couldsee(mtmp->mx, mtmp->my))
-        m_respond(mtmp);
+    /* some monsters have special abilities */
+    m_respond(mtmp);
     if (DEADMONSTER(mtmp))
         return 1; /* m_respond gaze can kill medusa */
 
@@ -1170,7 +1161,7 @@ leppie_stash(struct monst *mtmp)
     }
 }
 
-/* does monster want to avoid you? 
+/* does monster want to avoid you?
  *  returns the original value of appr if not.
  *  returns -1 if so.
  *  returns -2 if monster wants to adhere to a particular range,
@@ -1723,7 +1714,7 @@ m_move(struct monst *mtmp, int after)
     unsigned seenflgs;
     struct permonst *ptr;
     int chi, mmoved = MMOVE_NOTHING, /* not strictly nec.: chi >= 0 will do */
-        preferredrange_min = 0, preferredrange_max = 0; 
+        preferredrange_min = 0, preferredrange_max = 0;
     long info[9];
     long flag;
     coordxy omx = mtmp->mx, omy = mtmp->my;

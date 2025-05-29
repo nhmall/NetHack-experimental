@@ -1,4 +1,4 @@
-/* NetHack 3.7	objnam.c	$NHDT-Date: 1737528848 2025/01/21 22:54:08 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.444 $ */
+/* NetHack 3.7	objnam.c	$NHDT-Date: 1745114235 2025/04/19 17:57:15 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.453 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2011. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -220,8 +220,7 @@ obj_typename(int otyp)
     buf[0] = '\0'; /* redundant */
     switch (ocl->oc_class) {
     case COIN_CLASS:
-        Strcpy(buf, "coin");
-        break;
+        return strcpy(buf, actualn); /* "gold piece" */
     case POTION_CLASS:
         Strcpy(buf, "potion");
         break;
@@ -252,9 +251,17 @@ obj_typename(int otyp)
         if (dn)
             Sprintf(eos(buf), " (%s)", dn);
         return buf;
+    case ARMOR_CLASS:
+        if (objects[otyp].oc_armcat == ARM_GLOVES
+            || objects[otyp].oc_armcat == ARM_BOOTS)
+            Strcpy(buf, "pair of ");
+        else if (otyp >= GRAY_DRAGON_SCALES && otyp <= YELLOW_DRAGON_SCALES)
+            Strcpy(buf, "set of ");
+        FALLTHROUGH;
+        /*FALLTHRU*/
     default:
         if (nn) {
-            Strcpy(buf, actualn);
+            Strcat(buf, actualn);
             if (GemStone(otyp))
                 Strcat(buf, " stone");
             if (un) /* 3: length of " (" + ")" which will enclose 'dn' */
@@ -262,7 +269,7 @@ obj_typename(int otyp)
             if (dn)
                 Sprintf(eos(buf), " (%s)", dn);
         } else {
-            Strcpy(buf, dn ? dn : actualn);
+            Strcat(buf, dn ? dn : actualn);
             if (ocl->oc_class == GEM_CLASS)
                 Strcat(buf,
                        (ocl->oc_material == MINERAL) ? " stone" : " gem");
@@ -3763,10 +3770,9 @@ wizterrainwish(struct _readobjnam_data *d)
                 lev->wall_info |= (old_wall_info & WM_MASK);
             /* set up trapped flag; open door states aren't eligible */
             if (d->trapped == 2 /* 2: wish includes explicit "untrapped" */
-                || secret /* secret doors can't be trapped due to their use
-                           * of both doormask and wall_info; those both
-                           * overlay rm->flags and partially conflict */
-                || (lev->doormask & (D_LOCKED | D_CLOSED)) == 0)
+                || ((lev->doormask & (D_LOCKED | D_CLOSED)) == 0
+                    /* D_CLOSED is implicit for secret doors */
+                    && !secret))
                 d->trapped = 0;
             if (d->trapped)
                 lev->doormask |= D_TRAPPED;
@@ -5331,6 +5337,9 @@ readobjnam(char *bp, struct obj *no_wish)
         }
     }
 
+    if (permapoisoned(d.otmp))
+        d.otmp->opoisoned = 1;
+
     /* more wishing abuse: don't allow wishing for certain artifacts */
     /* and make them pay; charge them for the wish anyway! */
     if ((is_quest_artifact(d.otmp)
@@ -5357,7 +5366,7 @@ readobjnam(char *bp, struct obj *no_wish)
     }
     d.otmp->owt = weight(d.otmp);
     if (d.very && d.otmp->otyp == HEAVY_IRON_BALL)
-        d.otmp->owt += IRON_BALL_W_INCR;
+        d.otmp->owt += WT_IRON_BALL_INCR;
 
     return d.otmp;
 }
