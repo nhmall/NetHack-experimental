@@ -77,21 +77,28 @@ static NHFILE *create_dstfile(char *, enum saveformats);
 static const char *style_to_text(enum saveformats style);
 static void read_sysconf(void);
 static int length_without_val(const char *user_string, int len);
+static void usage(int argc, char **argv);
+static const char *briefname(const char *fnam);
 
-void zero_nhfile(NHFILE *);
-NHFILE *new_nhfile(void);
-void free_nhfile(NHFILE *);
-void my_close_nhfile(NHFILE *);
+extern void init_nhfile(NHFILE *);  /* files.c */
+extern NHFILE *new_nhfile(void);    /* files.c */
+extern void free_nhfile(NHFILE *);  /* files.c */
+
+/*
+ * This is a replacement tempered down version of same-named
+ * function in files.c within #ifndef SFCTOOL blocks.
+ */
 int delete_savefile(void);
-int nhclose(int fd);
+
+// int nhclose(int fd);
 int util_strncmpi(const char *s1, const char *s2, size_t sz);
 
 #ifdef UNIX
 #define nethack_exit exit
-void nh_terminate(int) NORETURN;   /* bwrite() calls this */
+ATTRNORETURN void nh_terminate(int) NORETURN;   /* bwrite() calls this */
 static void chdirx(const char *);
 #else
-extern void nethack_exit(int) NORETURN;
+ATTRNORETURN extern void nethack_exit(int) NORETURN;
 #ifdef WIN32
 boolean get_user_home_folder(char *homebuf, size_t sz);
 int GUILaunched;
@@ -146,7 +153,6 @@ const char *const rensuffixes[] = {
 extern boolean get_user_home_folder(char *homebuf, size_t sz); /* files.c */
 extern void set_default_prefix_locations(const char *programPath);
 #endif
-
 enum saveformats convertstyle = exportascii;
 
 boolean chosen_unconvert = FALSE, explicit_option = FALSE;
@@ -158,18 +164,19 @@ static char srclogfilenm[BUFSZ], dstlogfilenm[BUFSZ];
  *********/
 
 int
-main(int argc UNUSED, char *argv[])
+main(int argc, char *argv[])
 {
     int arg;
     char folderbuf[5000];
     const char *suffix = (convertstyle == exportascii) ? ".exportascii" : "";
-    boolean add_folder = TRUE;
-#ifdef WIN32
-    size_t sz;
-#endif
+    boolean add_folder = TRUE, add_extension = FALSE;
 
-    if (argc < 3)
-        exit(EXIT_FAILURE);
+#ifdef WIN32
+    const char *default_extension = ".NetHack-saved-game";
+    size_t sz;
+#else
+    const char *default_extension = "";
+#endif
 
     runtime_info_init(); /* mdlib.c */
 #ifdef UNIX
@@ -188,13 +195,26 @@ main(int argc UNUSED, char *argv[])
         exit(EXIT_FAILURE);
     sz = strlen(folderbuf);
     (void) snprintf(eos(folderbuf), sizeof folderbuf - sz,
-             "\\AppData\\Local\\NetHack\\3.7\\");
-    //initoptions_init(); // This allows OPTIONS in syscf on Windows.
+                    "\\AppData\\Local\\NetHack\\3.7\\");
+    // initoptions_init(); // This allows OPTIONS in syscf on Windows.
     set_default_prefix_locations(argv[0]);
 #endif
 
     read_sysconf();
+    thisdatamodel = datamodel(0);
+    if (argc < 3 && !(argc == 2 && !strcmp(argv[1], "-d"))) {
+        usage(argc, argv);
+        exit(EXIT_FAILURE);
+    }
     for (arg = 1; arg < argc; ++arg) {
+        if (arg == 1 && !strcmp(argv[arg], "-d")) {
+            fprintf(
+                stdout,
+                "\nThe historical savefile datamodel supported by this utility is %s (%s).\n",
+                thisdatamodel, datamodel(1));
+            exit(EXIT_SUCCESS);
+        }
+
         if (arg == 1 && !strcmp(argv[arg], "-u")) {
             explicit_option = TRUE;
             chosen_unconvert = TRUE;
@@ -209,6 +229,7 @@ main(int argc UNUSED, char *argv[])
             chosen_unconvert = FALSE;
             continue;
         }
+
         if (arg == 2) {
             size_t ln = strlen(argv[arg]);
             boolean addseparator = FALSE;
@@ -223,13 +244,23 @@ main(int argc UNUSED, char *argv[])
             } else {
                 add_folder = FALSE;
             }
+#ifdef WIN32
+            /* On Windows we allow specifying the savefile name without the extention
+             * in the arguments */
+            if (strstr(argv[arg], default_extension) == 0)
+                add_extension = TRUE;
+#endif
             if (explicit_option) {
                 if (add_folder)
                     ln += strlen(folderbuf);
+                if (add_extension)
+                    ln += strlen(default_extension);
                 unconverted_filename = (char *) alloc((int) ln + 1);
-                Snprintf(unconverted_filename, ln + 1, "%s%s%s", 
+                Snprintf(unconverted_filename, ln + 1, "%s%s%s%s",
                          add_folder ? folderbuf : "",
-                         addseparator ? "/" : "", argv[arg]);
+                         addseparator ? "/" : "",
+                         argv[arg],
+                         add_extension ? default_extension : "");
                 ln += strlen(suffix);
                 converted_filename = (char *) alloc((int) ln + 1);
                 Snprintf(converted_filename, ln + 1, "%s%s",
@@ -246,7 +277,7 @@ main(int argc UNUSED, char *argv[])
                 !converted_filename ? "" : "un");
         exit(EXIT_FAILURE); /* need both filenames */
     }
-    thisdatamodel = datamodel();
+
     my_sf_init();
     if (chosen_unconvert) {
         process_savefile(converted_filename, convertstyle,
@@ -274,17 +305,42 @@ process_savefile(const char *srcfnam, enum saveformats srcstyle,
     extern struct version_info vers_info;
     extern uchar cscbuf[];
     /* nh_uncompress(fq_save); */
+    const char *dmfile;
 
     if ((nhfp[srcidx] = open_srcfile(srcfnam, srcstyle)) == 0)
         return 0;
     sfstatus = validate(nhfp[srcidx], srcfnam, FALSE);
+    dmfile = what_datamodel_is_this(0,
+                                    cscbuf[1],  /* short */
+                                    cscbuf[2],  /* int */
+                                    cscbuf[3],  /* long */
+                                    cscbuf[4],  /* long long */
+                                    cscbuf[5]); /* ptr */
     if (sfstatus > SF_UPTODATE
         && ((sfstatus <= SF_CRITICAL_BYTE_COUNT_MISMATCH) || !unconvert)) {
-        fprintf(stderr,
-                "This savefile is not compatible with %sutility.\n%s\n",
-                !unconvert ? "the datamodel of this particular " : "this ",
-                srcfnam);
-        return 0;
+	if (sfstatus == SF_OUTDATED) {
+            fprintf(stderr,
+                "The %s savefile is outdated with respect to this %d.%d.%d EDITLEVEL %ld "
+		    "%s%s%s.\n",
+                briefname(srcfnam),
+		VERSION_MAJOR, VERSION_MINOR, PATCHLEVEL,
+		(long) EDITLEVEL,
+                thisdatamodel ? thisdatamodel : "",
+                thisdatamodel ? " " : "",
+		"sfctool");
+            return 0;
+	} else {
+            fprintf(stderr,
+                "The %s savefile %s%s%s not compatible with this %s%s %s utility.\n",
+                briefname(srcfnam),
+                dmfile ? "is a " : "",
+                dmfile ? dmfile : "",
+                dmfile ? " savefile, thus" : " is",
+                thisdatamodel ? thisdatamodel : "",
+                thisdatamodel ? " " : "",
+		"sfctool");
+            return 0;
+	}
     }
     if (sfstatus >= SF_DM_IL32LLP64_ON_ILP32LL64) {
         renidx = sfstatus - SF_DM_IL32LLP64_ON_ILP32LL64;
@@ -303,12 +359,16 @@ process_savefile(const char *srcfnam, enum saveformats srcstyle,
         nhfp[srcidx]->nhfpconvert = nhfp[CONVERTED];
     }
     if (unconvert)
-        fprintf(stdout, "\n\nunconverting %s to %s %s\n",
-                style_to_text(srcstyle), style_to_text(cvtstyle),
-                thisdatamodel);
+        fprintf(stdout, "\n\nunconverting %s to %s savefile called %s.\n",
+                briefname((const char *) converted_filename),
+                dmfile,
+                briefname((const char *) unconverted_filename));
     else
-        fprintf(stdout, "\n\nconverting %s %s to %s\n",
-                style_to_text(srcstyle), thisdatamodel, style_to_text(cvtstyle));
+        fprintf(stdout, "\n\nconverting %s %s format %s to %s format\n",
+                style_to_text(srcstyle),
+                thisdatamodel,
+                briefname((const char *) unconverted_filename),
+                style_to_text(cvtstyle));
 
     rewind_nhfile(nhfp[srcidx]);
 #ifdef SAVEFILE_DEBUGGING
@@ -420,7 +480,6 @@ open_srcfile(const char *fnam, enum saveformats mystyle)
     if (nhfp && nhfp->structlevel) {
         fd = open(fq_name, O_RDONLY | O_BINARY, 0);
         if (fd < 0) {
-            zero_nhfile(nhfp);
             free_nhfile(nhfp);
             fprintf(stderr,
                     "\nsfctool error - unable to open historical-style "
@@ -440,7 +499,6 @@ open_srcfile(const char *fnam, enum saveformats mystyle)
 
         nhfp->fpdef = fopen(fnam, RDBMODE);
         if (!nhfp->fpdef) {
-            zero_nhfile(nhfp);
             free_nhfile(nhfp);
             fprintf(stderr,
                     "\nsfctool error - unable to open fieldlevel-style "
@@ -535,7 +593,6 @@ create_dstfile(char *fnam, enum saveformats mystyle)
         fd = creat(dstfnam, FCMASK);
 #endif
         if (fd < 0) {
-            zero_nhfile(nhfp);
             free_nhfile(nhfp);
             fprintf(
                 stderr,
@@ -552,7 +609,6 @@ create_dstfile(char *fnam, enum saveformats mystyle)
         fq_name = fqname(dstfnam, SAVEPREFIX, 0);
         nhfp->fpdef = fopen(fq_name, WRBMODE);
         if (!nhfp->fpdef) {
-            zero_nhfile(nhfp);
             free_nhfile(nhfp);
             fprintf(
                 stderr,
@@ -562,6 +618,17 @@ create_dstfile(char *fnam, enum saveformats mystyle)
         }
     }
     return nhfp;
+}
+
+static const char *
+briefname(const char *fnam)
+{
+    const char *bn = fnam, *sep = (const char *) 0;
+
+    if ((sep = strrchr(fnam, '/')) || (sep = strrchr(fnam, '\\'))
+        || (sep = strrchr(fnam, ':')))
+        bn = sep + 1;
+    return bn;
 }
 
 static const char *
@@ -625,17 +692,27 @@ read_sysconf(void)
 #endif /* SYSCF */
 }
 
+/* provided for linkage only */
 
 DISABLE_WARNING_FORMAT_NONLITERAL
 
-/* provided for linkage only */
+void
+raw_printf(const char *line, ...)
+{
+    va_list the_args;
+
+    va_start(the_args, line);
+    vfprintf(stdout, line, the_args);
+    va_end(the_args);
+}
+
 void
 error(const char *s, ...)
 {
     va_list the_args;
 
     va_start(the_args, s);
-    printf(s, the_args);
+    vprintf(s, the_args);
     va_end(the_args);
     exit(EXIT_FAILURE);
 }
@@ -646,7 +723,7 @@ pline(const char *s, ...)
     va_list the_args;
 
     va_start(the_args, s);
-    printf(s, the_args);
+    vprintf(s, the_args);
     va_end(the_args);
 }
 
@@ -656,144 +733,9 @@ impossible(const char *s, ...)
     va_list the_args;
 
     va_start(the_args, s);
-    printf(s, the_args);
+    vprintf(s, the_args);
     va_end(the_args);
     exit(EXIT_FAILURE);
-}
-
-RESTORE_WARNING_FORMAT_NONLITERAL
-
-/* TIME_type: type of the argument to time(); we actually use &(time_t) */
-#if defined(BSD) && !defined(POSIX_TYPES)
-#define TIME_type long *
-#else
-#define TIME_type time_t *
-#endif
-/* LOCALTIME_type: type of the argument to localtime() */
-#if (defined(ULTRIX) && !(defined(ULTRIX_PROTO) || defined(NHSTDC))) \
-    || (defined(BSD) && !defined(POSIX_TYPES))
-#define LOCALTIME_type long *
-#else
-#define LOCALTIME_type time_t *
-#endif
-
-#if defined(AMIGA) && !defined(AZTEC_C) && !defined(__SASC_60) \
-    && !defined(_DCC) && !defined(__GNUC__)
-extern struct tm *localtime(time_t *);
-#endif
-static struct tm *getlt(void);
-
-time_t
-getnow(void)
-{
-    time_t datetime = 0;
-
-    (void) time((TIME_type) &datetime);
-    return datetime;
-}
-
-static struct tm *
-getlt(void)
-{
-    time_t date = getnow();
-
-    return localtime((LOCALTIME_type) &date);
-}
-
-int
-getyear(void)
-{
-    return (1900 + getlt()->tm_year);
-}
-
-time_t
-time_from_yyyymmddhhmmss(char *buf)
-{
-    int k;
-    time_t timeresult = (time_t) 0;
-    struct tm t, *lt;
-    char *d, *p, y[5], mo[3], md[3], h[3], mi[3], s[3];
-
-    if (buf && strlen(buf) == 14) {
-        d = buf;
-        p = y; /* year */
-        for (k = 0; k < 4; ++k)
-            *p++ = *d++;
-        *p = '\0';
-        p = mo; /* month */
-        for (k = 0; k < 2; ++k)
-            *p++ = *d++;
-        *p = '\0';
-        p = md; /* day */
-        for (k = 0; k < 2; ++k)
-            *p++ = *d++;
-        *p = '\0';
-        p = h; /* hour */
-        for (k = 0; k < 2; ++k)
-            *p++ = *d++;
-        *p = '\0';
-        p = mi; /* minutes */
-        for (k = 0; k < 2; ++k)
-            *p++ = *d++;
-        *p = '\0';
-        p = s; /* seconds */
-        for (k = 0; k < 2; ++k)
-            *p++ = *d++;
-        *p = '\0';
-        lt = getlt();
-        if (lt) {
-            t = *lt;
-            t.tm_year = atoi(y) - 1900;
-            t.tm_mon = atoi(mo) - 1;
-            t.tm_mday = atoi(md);
-            t.tm_hour = atoi(h);
-            t.tm_min = atoi(mi);
-            t.tm_sec = atoi(s);
-            timeresult = mktime(&t);
-        }
-        return timeresult;
-    }
-    return (time_t) 0;
-}
-
-char *
-yyyymmddhhmmss(time_t date)
-{
-    long datenum;
-    static char datestr[15];
-    struct tm *lt;
-
-    if (date == 0)
-        lt = getlt();
-    else
-#if (defined(ULTRIX) && !(defined(ULTRIX_PROTO) || defined(NHSTDC))) \
-    || defined(BSD)
-        lt = localtime((long *) (&date));
-#else
-        lt = localtime(&date);
-#endif
-    /* just in case somebody's localtime supplies (year % 100)
-       rather than the expected (year - 1900) */
-    if (lt->tm_year < 70)
-        datenum = (long) lt->tm_year + 2000L;
-    else
-        datenum = (long) lt->tm_year + 1900L;
-    Snprintf(datestr, sizeof datestr, "%04ld%02d%02d%02d%02d%02d",
-                datenum, lt->tm_mon + 1,
-                lt->tm_mday, lt->tm_hour, lt->tm_min, lt->tm_sec);
-    return datestr;
-}
-
-DISABLE_WARNING_FORMAT_NONLITERAL
-
-void
-raw_printf(const char *line, ...)
-{
-    va_list the_args;
-
-    va_start(the_args, line);
-    fprintf(stdout, line, the_args);
-    va_end(the_args);
 }
 
 RESTORE_WARNING_FORMAT_NONLITERAL
@@ -830,7 +772,7 @@ regularize(char *s)
 #endif
 #endif
 }
-#endif
+#endif /* UNIX */
 
 int
 util_strncmpi(const char *s1, const char *s2, size_t sz)
@@ -1279,7 +1221,7 @@ free_oname(struct obj *obj)
     }
 }
 
-#ifdef WIN32 
+#ifdef WIN32
 void
 win32_abort(void)
 {
@@ -1320,4 +1262,19 @@ match_optname(const char *user_string, const char *optn_name, int min_length,
                       && !strncmpi(optn_name, user_string, len));
 }
 
+staticfn void
+usage(int argc UNUSED, char **argv)
+{
+    char *cp = argv[0], *sep = (char *) 0;
+
+    if ((sep = strrchr(cp, '/')) || (sep = strrchr(cp, '\\'))
+        || (sep = strrchr(cp, ':')))
+        cp = sep + 1;
+    fprintf(stderr,
+            "\nTo convert a savefile to export format:\n    %s %s %s\n", cp,
+            "-c", "savefile");
+    fprintf(stderr,
+            "\nTo unconvert an exported savefile back into a savefile:\n    %s %s %s\n", cp,
+            "-u", "savefile");
+}
 /* sfctool.c */

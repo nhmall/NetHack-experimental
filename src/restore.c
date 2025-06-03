@@ -236,12 +236,9 @@ restobjchn(NHFILE *nhfp, boolean frozen)
 #ifndef SFCTOOL
     boolean ghostly = (nhfp->ftype == NHF_BONESFILE);
 #endif
-    boolean trouble = FALSE;
 
     while (1) {
         Sfi_int(nhfp, &buflen, "obj-obj_length");
-        if (!(buflen != -1 || buflen != sizeof (struct obj)))
-           trouble = TRUE;
         if (buflen == -1)
             break;
 
@@ -302,7 +299,6 @@ restobjchn(NHFILE *nhfp, boolean frozen)
 #ifdef SFCTOOL
     nhUse(frozen);
 #endif
-    nhUse(trouble);
     return first;
 }
 
@@ -806,15 +802,11 @@ dorecover(NHFILE *nhfp)
      */
     getlev(nhfp, 0, (xint8) 0);
     if (!restgamestate(nhfp)) {
-        NHFILE tnhfp;
+        NHFILE *tnhfp = get_freeing_nhfile();
 
         display_nhwindow(WIN_MESSAGE, TRUE);
-        zero_nhfile(&tnhfp);
-        tnhfp.mode = FREEING;
-        tnhfp.fd = -1;
-        savelev(&tnhfp, 0); /* discard current level */
-        /* no need for close_nhfile(&tnhfp), which
-           is not really affiliated with an open file */
+        savelev(tnhfp, 0); /* discard current level */
+        close_nhfile(tnhfp);
         close_nhfile(nhfp);
         (void) delete_savefile();
         u.usteed_mid = u.ustuck_mid = 0;
@@ -1393,7 +1385,9 @@ void
 restore_msghistory(NHFILE *nhfp)
 {
     int msgsize = 0;
+#ifndef SFCTOOL
     int msgcount = 0;
+#endif
     char msg[BUFSZ];
 
     while (1) {
@@ -1406,8 +1400,8 @@ restore_msghistory(NHFILE *nhfp)
         msg[msgsize] = '\0';
 #ifndef SFCTOOL
         putmsghistory(msg, TRUE);
-#endif  /* !SFCTOOL */
         ++msgcount;
+#endif /* !SFCTOOL */
     }
 #ifndef SFCTOOL
     if (msgcount)
