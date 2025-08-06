@@ -372,6 +372,7 @@ static const struct instance_globals_g g_init_g = {
     0L, /* gmst_moves */
     NULL, /* gmst_invent */
     NULL, NULL, NULL, /* gmst_ubak, gmst_disco, gmst_mvitals */
+    { DUMMY }, /* gmst_spl_book */
     /* pline.c */
     UNDEFINED_PTR, /* gamelog */
     /* region.c */
@@ -507,6 +508,8 @@ static const struct instance_globals_m g_init_m = {
     UNDEFINED_PTR, /* migrating_mons */
     /* dokick.c */
     UNDEFINED_PTR, /* maploc */
+    /* mhitm.c */
+    UNDEFINED_PTR, /* mswallower */
     /* mhitu.c */
     UNDEFINED_VALUE, /* mhitu_dieroll */
     /* mklev.c */

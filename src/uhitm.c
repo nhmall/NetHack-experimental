@@ -1,4 +1,4 @@
-/* NetHack 3.7	uhitm.c	$NHDT-Date: 1736575153 2025/01/10 21:59:13 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.461 $ */
+/* NetHack 3.7	uhitm.c	$NHDT-Date: 1752823766 2025/07/17 23:29:26 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.477 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2012. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -1055,7 +1055,8 @@ hmon_hitmon_weapon(
         /* or strike with a missile in your hand... */
         || (!hmd->thrown && (is_missile(obj) || is_ammo(obj)))
         /* or use a pole at short range and not mounted... */
-        || (!hmd->thrown && !u.usteed && is_pole(obj))
+        || (!hmd->thrown && !u.usteed && is_pole(obj)
+            && !is_art(obj,ART_SNICKERSNEE))
         /* or throw a missile without the proper bow... */
         || (is_ammo(obj) && (hmd->thrown != HMON_THROWN
                              || !ammo_and_launcher(obj, uwep)))) {
@@ -5004,6 +5005,7 @@ gulpum(struct monst *mdef, struct attack *mattk)
                    "you totally digest <mdef>" will be coming soon (after
                    several turns) but the level-gain message seems out of
                    order if the kill message is left implicit */
+                gm.mswallower = &gy.youmonst;
                 xkilled(mdef, XKILL_GIVEMSG | XKILL_NOCORPSE);
                 if (!DEADMONSTER(mdef)) { /* monster lifesaved */
                     You("hurriedly regurgitate the sizzling in your %s.",
@@ -5044,6 +5046,7 @@ gulpum(struct monst *mdef, struct attack *mattk)
                     } else
                         exercise(A_CON, TRUE);
                 }
+                gm.mswallower = (struct monst *) 0;
                 end_engulf();
                 return M_ATTK_DEF_DIED;
             case AD_PHYS:
@@ -5203,12 +5206,26 @@ mhitm_knockback(
     boolean u_def = (mdef == &gy.youmonst);
     boolean was_u = FALSE, dismount = FALSE;
     struct obj *wep = weapon_used ? (u_agr ? uwep : MON_WEP(magr))
-                                  : (struct obj *)0;
+                                  : (struct obj *) 0;
 
     if (wep && is_art(wep, ART_OGRESMASHER))
         chance = 2;
 
     if (rn2(chance))
+        return FALSE;
+
+    /* only certain attacks qualify for knockback */
+    if (!((mattk->adtyp == AD_PHYS)
+          && (mattk->aatyp == AT_CLAW
+              || mattk->aatyp == AT_KICK
+              || mattk->aatyp == AT_BUTT
+              || mattk->aatyp == AT_WEAP)))
+        return FALSE;
+
+    /* don't knockback if attacker also wants to grab or engulf */
+    if (attacktype(magr->data, AT_ENGL)
+        || attacktype(magr->data, AT_HUGS)
+        || sticks(magr->data))
         return FALSE;
 
     /* decide where the first step will place the target; not accurate
@@ -5255,14 +5272,6 @@ mhitm_knockback(
 
     /* no knockback with a flimsy or non-blunt weapon */
     if (wep && (is_flimsy(wep) || !is_blunt_weapon(wep)))
-        return FALSE;
-
-    /* only certain attacks qualify for knockback */
-    if (!((mattk->adtyp == AD_PHYS)
-          && (mattk->aatyp == AT_CLAW
-              || mattk->aatyp == AT_KICK
-              || mattk->aatyp == AT_BUTT
-              || mattk->aatyp == AT_WEAP)))
         return FALSE;
 
     /* needs a solid physical hit */
@@ -5388,6 +5397,14 @@ hmonas(struct monst *mon)
 
     for (i = 0; i < NATTK; i++) {
         /* sum[i] = M_ATTK_MISS; -- now done above */
+
+        /* target might have been knocked back so no longer in range, or an
+           engulfing vampshifted fog cloud killed and reverted to vampire
+           that's placed at another spot (hero occupies mon's first spot) */
+        if (i > 0 && (m_at(gb.bhitpos.x, gb.bhitpos.y) != mon
+                      || DEADMONSTER(mon)))
+            continue;
+
         mattk = getmattk(&gy.youmonst, mon, i, sum, &alt_attk);
         if (gs.skipdrin && mattk->aatyp == AT_TENT && mattk->adtyp == AD_DRIN)
             continue;
@@ -5484,6 +5501,10 @@ hmonas(struct monst *mon)
             FALLTHROUGH;
             /*FALLTHRU*/
         case AT_KICK:
+            if (mattk->aatyp == AT_KICK && mtrapped_in_pit(&gy.youmonst))
+                continue;
+            FALLTHROUGH;
+            /*FALLTHRU*/
         case AT_BITE:
         case AT_STNG:
         case AT_BUTT:
