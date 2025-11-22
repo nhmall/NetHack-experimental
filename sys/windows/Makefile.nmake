@@ -8,7 +8,8 @@
 #       MS Visual Studio Visual C++ compiler
 #
 #       Visual Studio Compilers Tested:
-#            - Microsoft Visual Studio 2022 Community Edition v 17.14.18
+#            - Microsoft Visual Studio Community 2022 v 17.14.21
+#            - Microsoft Visual Studio Community 2026 v 18.0.1
 #
 #==============================================================================
 #   This is used for building two distinct executables of NetHack:
@@ -106,6 +107,7 @@ GIT_AVAILABLE = N
 
 #TARGET_CPU=x64
 #TARGET_CPU=x86
+#TARGET_CPU=arm64
 
 #==============================================================================
 #======================== End of Modification Section =========================
@@ -392,6 +394,7 @@ ADD_CURSES = N
 #developer command prompts.
 #VSCMD_ARG_HOST_ARCH=x64
 #VSCMD_ARG_TGT_ARCH=x86
+#VSCMD_ARG_TGT_ARCH=arm64
 
 # We need to do this here, so some output files can
 # incorporate TARGET_CPU into their names.
@@ -403,7 +406,11 @@ ADD_CURSES = N
 !  IF "$(VSCMD_ARG_TGT_ARCH)"=="x64"
 TARGET_CPU=x64
 !  ELSE
+!    IF "$(VSCMD_ARG_TGT_ARCH)"=="arm64"
+TARGET_CPU=arm64
+!    ELSE
 TARGET_CPU=x86
+!    ENDIF
 !  ENDIF
 ! ENDIF
 !ENDIF
@@ -1177,9 +1184,9 @@ rc=Rc.exe
 # is too old or untested.
 #
 # Recently tested versions:
-TESTEDVS2022 = 14.44.35217.0
+TESTEDVS2022 = 14.44.35221.0
 # Other versions:
-TESTEDVS2026 = 14.50.35717.0
+TESTEDVS2026 = 14.50.35718.0
 
 VS20261ST = 1450000000
 VS2026CUR = $(TESTEDVS2026:.=)
@@ -1268,6 +1275,9 @@ scall  = -Gz
 !ELSEIF "$(TARGET_CPU)" == "x64"
 ctmpflags = $(ctmpflags1) -D_AMD64_=1 -DWIN64 -D_WIN64  -DWIN32 -D_WIN32 -W4
 scall  =
+!ELSEIF "$(TARGET_CPU)" == "arm64"
+ctmpflags = $(ctmpflags1) -DWIN64 -D_WIN64  -DWIN32 -D_WIN32 -W4
+scall  =
 !ENDIF
 
 !IF ($(VSVER) >= 2012)
@@ -1323,6 +1333,12 @@ MACHINE=/MACHINE:X86
 !IF "$(TARGET_CPU)" == "x64"
 DLLENTRY =
 MACHINE=/MACHINE:X64
+!ENDIF
+
+# declarations for use on arm64 systems
+!IF "$(TARGET_CPU)" == "arm64"
+DLLENTRY =
+MACHINE=/MACHINE:arm64
 !ENDIF
 
 # for Windows applications
@@ -2008,7 +2024,11 @@ cpu.tag:
 !	IF "$(TARGET_CPU)"=="x64"
 	@echo Windows x64 64-bit target build
 !	ELSE
+!          IF "$(TARGET_CPU)"=="arm64" 
+	@echo Windows arm64 64-bit target build
+!          ELSE
 	@echo Windows x86 32-bit target build
+!          ENDIF
 !	ENDIF
 	@echo cpu >$@
 
@@ -2767,6 +2787,13 @@ spotless: clean
 	if exist opdcdirx64.tag         del opdcdirx64.tag
 	if exist opdccdirx64.tag        del opdccdirx64.tag
 	if exist opdcgdirx64.tag        del opdcgdirx64.tag
+	if exist outldirarm64.tag       del outldirarm64.tag
+	if exist ottydirarm64.tag       del ottydirarm64.tag
+	if exist oguidirarm64.tag       del oguidirarm64.tag
+	if exist oluadirarm64.tag       del oluadirarm64.tag
+	if exist opdcdirarm64.tag       del opdcdirarm64.tag
+	if exist opdccdirarm64.tag      del opdccdirarm64.tag
+	if exist opdcgdirarm64.tag      del opdcgdirarm64.tag
 	if exist libdir.tag             del libdir.tag
 	if exist gamedir.tag            del gamedir.tag
 	if exist $(MSWIN)mnsel.bmp     del $(MSWIN)mnsel.bmp
