@@ -1,4 +1,4 @@
-/* NetHack 3.7	extern.h	$NHDT-Date: 1738638877 2025/02/03 19:14:37 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.1476 $ */
+/* NetHack 3.7	extern.h	$NHDT-Date: 1764044196 2025/11/24 20:16:36 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.1509 $ */
 /* Copyright (c) Steve Creps, 1988.                               */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -258,6 +258,7 @@ extern void free_ebones(struct monst *) NONNULLARG1;
 
 /* ### botl.c ### */
 
+extern char *get_strength_str(void);
 extern char *do_statusline1(void);
 extern void check_gold_symbol(void);
 extern char *do_statusline2(void);
@@ -1657,6 +1658,7 @@ extern struct obj *mk_named_object(int, struct permonst *,
                                    coordxy, coordxy,
                                    const char *) ;
 extern struct obj *rnd_treefruit_at(coordxy, coordxy);
+extern boolean is_treefruit(struct obj *) NONNULLARG1;
 extern void set_corpsenm(struct obj *, int) NONNULLARG1;
 extern long rider_revival_time(struct obj *, boolean) NONNULLARG1;
 extern void start_corpse_timeout(struct obj *) NONNULLARG1;
@@ -2154,7 +2156,8 @@ extern boolean objdescr_is(struct obj *, const char *) NONNULLARG2;
 extern void oinit(void);
 extern void savenames(NHFILE *) NONNULLARG1;
 extern void restnames(NHFILE *) NONNULLARG1;
-extern void discover_object(int, boolean, boolean);
+extern void observe_object(struct obj *) NONNULLARG1;
+extern void discover_object(int, boolean, boolean, boolean);
 extern void undiscover_object(int);
 extern boolean interesting_to_discover(int);
 extern int choose_disco_sort(int);
@@ -2404,8 +2407,9 @@ extern int query_category(const char *, struct obj *, int, menu_item **, int) NO
 /* dotypeinv() call query_objlist with NULL arg1 */
 extern int query_objlist(const char *, struct obj **, int, menu_item **, int,
                          boolean(*)(struct obj *)) NONNULLARG24;
+extern boolean reroll_menu(void);
 extern struct obj *pick_obj(struct obj *) NONNULLARG1;
-extern int encumber_msg(void);
+extern void encumber_msg(void);
 extern int container_at(coordxy, coordxy, boolean);
 extern int doloot(void);
 extern void observe_quantum_cat(struct obj *, boolean, boolean) NONNULLARG1;
@@ -3037,6 +3041,7 @@ extern int spelleffects(int, boolean, boolean);
 extern int tport_spell(int);
 extern void losespells(void);
 extern int dovspell(void);
+extern void show_spells(void);
 extern void initialspell(struct obj *) NONNULLARG1;
 extern int known_spell(short);
 extern int spell_idx(short);
@@ -3302,7 +3307,9 @@ extern void trap_sanity_check(void);
 
 /* ### u_init.c ### */
 
-extern void u_init(void);
+extern void u_init_misc(void);
+extern void u_init_inventory_attrs(void);
+extern void u_init_skills_discoveries(void);
 
 /* ### uhitm.c ### */
 
@@ -3667,6 +3674,7 @@ extern void dry_a_towel(struct obj *, int, boolean) NONNULLARG1;
 extern char *skill_level_name(int, char *) NONNULLARG2;
 extern const char *skill_name(int);
 extern boolean can_advance(int, boolean);
+extern void show_skills(void);
 extern int enhance_weapon_skill(void);
 extern void unrestrict_weapon_skill(int);
 extern void use_skill(int, int);
