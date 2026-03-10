@@ -1,4 +1,4 @@
-/* NetHack 3.7	u_init.c	$NHDT-Date: 1737620595 2025/01/23 00:23:15 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.113 $ */
+/* NetHack 3.7	u_init.c	$NHDT-Date: 1769398807 2026/01/25 19:40:07 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.121 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2017. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -861,7 +861,7 @@ u_init_race(void)
     }
 }
 
-/* for 'pauper' aka 'unpreparsed'; take away any skills (bare-handed combat,
+/* for 'pauper' aka 'unprepared'; take away any skills (bare-handed combat,
    riding) that are better than unskilled; learn the book (without carrying
    it or knowing its spell yet) for some key spells */
 staticfn void
@@ -1012,7 +1012,7 @@ u_init_misc(void)
 
     /*
      *  For now, everyone starts out with a night vision range of 1 and
-     *  their xray range disabled.
+     *  their xray_range disabled.
      */
     u.nv_range = 1;
     u.xray_range = -1;
@@ -1314,8 +1314,8 @@ ini_inv(const struct trobj *trop)
         } else { /* UNDEF_TYP */
             obj = ini_inv_mkobj_filter(trop->trclass, got_sp1);
             otyp = obj->otyp;
-            /* Heavily relies on the fact that 1) we create wands
-             * before rings, 2) that we create rings before
+            /* Heavily relies on the facts that 1) we create wands
+             * before rings, that 2) we create rings before
              * spellbooks, and that 3) not more than 1 object of a
              * particular symbol is to be prohibited.  (For more
              * objects, we need more nocreate variables...)
