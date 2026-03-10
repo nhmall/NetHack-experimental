@@ -1187,12 +1187,33 @@ seffect_enchant_armor(struct obj **sobjp)
         useup(otmp);
         return;
     }
-    s = scursed ? -1
-        : (otmp->spe >= 9)
-        ? (rn2(otmp->spe) == 0)
-        : sblessed
-        ? rnd(3 - otmp->spe / 3)
-        : 1;
+    if (s < -100) s = -100; /* avoid integer overflow with very negative armor */
+
+    /* Base power of the enchantment:
+
+       2 for -1 to +0 armor;
+       1 for +1 to +2 armor;
+       0 for +3 to +4 armor, etc.
+
+       When disenchanting, everything is done with reversed signs. */
+    s = (4 - s) / 2;
+
+    /* Elven/artifact and nonmagical armor is easier to enchant;
+       blessed scrolls are more effective. */
+    if (special_armor) ++s;
+    if (!objects[otmp->otyp].oc_magic) ++s;
+    if (sblessed) ++s;
+
+    if (s <= 0) {
+        s = 0;
+        if (otmp->spe > 0 && !rn2(otmp->spe)) s = 1;
+    } else {
+        s = rnd(s);
+    }
+    if (s > 11) s = 11;    /* unlikely but possible: avoids an overflow later */
+
+    if (scursed) s = -s;
+
     if (s >= 0 && Is_dragon_scales(otmp)) {
         unsigned was_lit = otmp->lamplit;
         int old_light = artifact_light(otmp) ? arti_light_radius(otmp) : 0;

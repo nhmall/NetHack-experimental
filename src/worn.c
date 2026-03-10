@@ -1,4 +1,4 @@
-/* NetHack 3.7	worn.c	$NHDT-Date: 1736530208 2025/01/10 09:30:08 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.116 $ */
+/* NetHack 3.7	worn.c	$NHDT-Date: 1770949988 2026/02/12 18:33:08 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.119 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2013. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -463,11 +463,13 @@ check_wornmask_slots(void)
 } /* check_wornmask_slots() */
 
 void
-mon_set_minvis(struct monst *mon)
+mon_set_minvis(
+    struct monst *mon,
+    boolean cursed_potion)
 {
-    mon->perminvis = 1;
+    mon->perminvis = !cursed_potion ? 1 : 0;
     if (!mon->invis_blkd) {
-        mon->minvis = 1;
+        mon->minvis = mon->perminvis;
         newsym(mon->mx, mon->my); /* make it disappear */
         if (mon->wormno)
             see_wsegs(mon); /* and any tail too */
@@ -487,7 +489,7 @@ mon_adjust_speed(
     switch (adjust) {
     case 2:
         mon->permspeed = MFAST;
-        give_msg = FALSE; /* special case monster creation */
+        give_msg = FALSE; /* special-case monster creation */
         break;
     case 1:
         if (mon->permspeed == MSLOW)
@@ -980,7 +982,7 @@ m_dowear_type(
         }
     }
     update_mon_extrinsics(mon, best, TRUE, creation);
-    /* if couldn't see it but now can, or vice versa, */
+    /* if couldn't see it but now can, or vice versa */
     if (!creation && (sawmon ^ canseemon(mon))) {
         if (mon->minvis && !See_invisible) {
             pline("Suddenly you cannot see %s.", nambuf);

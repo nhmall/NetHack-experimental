@@ -1,4 +1,4 @@
-/* NetHack 3.7	mon.c	$NHDT-Date: 1753856387 2025/07/29 22:19:47 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.611 $ */
+/* NetHack 3.7	mon.c	$NHDT-Date: 1770949988 2026/02/12 18:33:08 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.621 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Derek S. Ray, 2015. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -667,14 +667,18 @@ make_corpse(struct monst *mtmp, unsigned int corpseflags)
     case PM_ROPE_GOLEM:
         num = rn2(3);
         while (num-- > 0) {
-            obj = mksobj_at(rn2(2) ? LEASH : BULLWHIP, x, y, TRUE, FALSE);
+            obj = mksobj_at(rn2(2) ? LEASH
+                            : rn2(3) ? BULLWHIP : GRAPPLING_HOOK,
+                            x, y, TRUE, FALSE);
         }
         free_mgivenname(mtmp);
         break;
     case PM_LEATHER_GOLEM:
         num = d(2, 4);
         while (num--)
-            obj = mksobj_at(LEATHER_ARMOR, x, y, TRUE, FALSE);
+            obj = mksobj_at(rn2(4) ? LEATHER_ARMOR
+                            : rn2(3) ? LEATHER_CLOAK : SADDLE,
+                            x, y, TRUE, FALSE);
         free_mgivenname(mtmp);
         break;
     case PM_GOLD_GOLEM:
@@ -1112,9 +1116,14 @@ mcalcmove(
      *       MFAST's `+ 2' prevents hasted speed 1 from becoming a no-op;
      *       both adjustments have negligible effect on higher speeds.
      */
-    if (mon->mspeed == MSLOW)
-        mmove = (2 * mmove + 1) / 3;
-    else if (mon->mspeed == MFAST)
+    if (mon->mspeed == MSLOW) {
+        /* slow-monster effects work better against faster monsters: they
+           lose 1/3 of their speed below 12 but 2/3 of their speed above */
+        if (mmove < 12)
+            mmove = (2 * mmove + 1) / 3;
+        else
+            mmove = 4 + (mmove / 3);
+    } else if (mon->mspeed == MFAST)
         mmove = (4 * mmove + 2) / 3;
 
     if (mon == u.usteed && u.ugallop && svc.context.mv) {
@@ -1775,7 +1784,7 @@ mon_givit(struct monst *mtmp, struct permonst *ptr)
             char mtmpbuf[BUFSZ];
 
             Strcpy(mtmpbuf, Monnam(mtmp));
-            mon_set_minvis(mtmp);
+            mon_set_minvis(mtmp, FALSE);
             if (vis)
                 pline_mon(mtmp, "%s %s.", mtmpbuf,
                       !canspotmon(mtmp) ? "vanishes"
@@ -2111,8 +2120,7 @@ m_in_air(struct monst *mtmp)
 int
 mfndpos(
     struct monst *mon,
-    coord *poss, /* coord poss[9] */
-    long *info,  /* long info[9] */
+    struct mfndposdata *data,
     long flag)
 {
     struct permonst *mdat = mon->data;
@@ -2131,6 +2139,8 @@ mfndpos(
     x = mon->mx;
     y = mon->my;
     nowtyp = levl[x][y].typ;
+
+    (void)memset((genericptr_t) data, 0, sizeof(struct mfndposdata));
 
     nodiag = NODIAG(mdat - mons);
     wantpool = (mdat->mlet == S_EEL);
@@ -2247,11 +2257,11 @@ mfndpos(
                     dispy = ny;
                 }
 
-                info[cnt] = 0;
+                data->info[cnt] = 0;
                 if (onscary(dispx, dispy, mon)) {
                     if (!(flag & ALLOW_SSM))
                         continue;
-                    info[cnt] |= ALLOW_SSM;
+                    data->info[cnt] |= ALLOW_SSM;
                 }
                 if (u_at(nx, ny)
                     || (nx == mon->mux && ny == mon->muy)) {
@@ -2267,25 +2277,25 @@ mfndpos(
                     }
                     if (!(flag & ALLOW_U))
                         continue;
-                    info[cnt] |= ALLOW_U;
+                    data->info[cnt] |= ALLOW_U;
                 } else {
                     if (MON_AT(nx, ny)) {
                         struct monst *mtmp2 = m_at(nx, ny);
                         long mmflag = flag | mm_aggression(mon, mtmp2);
 
                         if (mmflag & ALLOW_M) {
-                            info[cnt] |= ALLOW_M;
+                            data->info[cnt] |= ALLOW_M;
                             if (mtmp2->mtame) {
                                 if (!(mmflag & ALLOW_TM))
                                     continue;
-                                info[cnt] |= ALLOW_TM;
+                                data->info[cnt] |= ALLOW_TM;
                             }
                         } else {
                             flag &= ~ALLOW_MDISP; /* depends upon defender */
                             mmflag = flag | mm_displacement(mon, mtmp2);
                             if (!(mmflag & ALLOW_MDISP))
                                 continue;
-                            info[cnt] |= ALLOW_MDISP;
+                            data->info[cnt] |= ALLOW_MDISP;
                         }
                     }
                     /* Note: ALLOW_SANCT only prevents movement, not
@@ -2296,23 +2306,23 @@ mfndpos(
                         && in_your_sanctuary((struct monst *) 0, nx, ny)) {
                         if (!(flag & ALLOW_SANCT))
                             continue;
-                        info[cnt] |= ALLOW_SANCT;
+                        data->info[cnt] |= ALLOW_SANCT;
                     }
                 }
                 if (checkobj && sobj_at(CLOVE_OF_GARLIC, nx, ny)) {
                     if (flag & NOGARLIC)
                         continue;
-                    info[cnt] |= NOGARLIC;
+                    data->info[cnt] |= NOGARLIC;
                 }
                 if (checkobj && sobj_at(BOULDER, nx, ny)) {
                     if (!(flag & ALLOW_ROCK))
                         continue;
-                    info[cnt] |= ALLOW_ROCK;
+                    data->info[cnt] |= ALLOW_ROCK;
                 }
                 if (monseeu && monlineu(mon, nx, ny)) {
                     if (flag & NOTONL)
                         continue;
-                    info[cnt] |= NOTONL;
+                    data->info[cnt] |= NOTONL;
                 }
                 /* check for diagonal tight squeeze */
                 if (nx != x && ny != y && bad_rock(mdat, x, ny)
@@ -2332,17 +2342,17 @@ mfndpos(
                     }
                     /* fixed-destination teleport trap, was used by hero */
                     if (fixed_tele_trap(ttmp) && hastrack(nx, ny))
-                        info[cnt] |= ALLOW_TRAPS;
+                        data->info[cnt] |= ALLOW_TRAPS;
                     else if (!m_harmless_trap(mon, ttmp)) {
                         if (!(flag & ALLOW_TRAPS)) {
                             if (mon_knows_traps(mon, ttmp->ttyp))
                                 continue;
                         }
-                        info[cnt] |= ALLOW_TRAPS;
+                        data->info[cnt] |= ALLOW_TRAPS;
                     }
                 }
-                poss[cnt].x = nx;
-                poss[cnt].y = ny;
+                data->poss[cnt].x = nx;
+                data->poss[cnt].y = ny;
                 cnt++;
             }
         }
@@ -2350,6 +2360,7 @@ mfndpos(
         wantpool = FALSE;
         goto nexttry;
     }
+    data->cnt = cnt;
     return cnt;
 }
 
@@ -2685,20 +2696,6 @@ mon_leaving_level(struct monst *mon)
 #endif
     }
     if (onmap) {
-        /* gulpmm() tries to deal with this, but without this extra
-           place_monster() the messages for exploding engulfed gas spore
-           are delivered without the engulfer being shown on the map */
-        if (gm.mswallower && gm.mswallower != mon) {
-            if (gm.mswallower != &gy.youmonst) {
-                place_monster(gm.mswallower,
-                              gm.mswallower->mx, gm.mswallower->my);
-            } else {
-                u_on_newpos(u.ux, u.uy);
-                if (canspotself())
-                    display_self();
-            }
-        }
-
         mon->mundetected = 0; /* for migration; doesn't matter for death */
         /* unhide mimic in case its shape has been blocking line of sight
            or it is accompanying the hero to another level */
@@ -2949,7 +2946,7 @@ vamprises(struct monst *mtmp)
             set_msg_xy(0, 0); /* in case none of the messages was delivered */
 
             door->doormask = D_NODOOR;
-            unblock_point(x, y);
+            recalc_block_point(x, y);
             if (trapped) {
                 boolean trap_killed, save_verbose = flags.verbose;
 
@@ -3430,6 +3427,7 @@ unstuck(struct monst *mtmp)
         set_ustuck((struct monst *) 0);
 
         if (swallowed) {
+            gm.mswallower = (struct monst *) 0;
             u.ux = mtmp->mx;
             u.uy = mtmp->my;
             if (Punished && uchain->where != OBJ_FLOOR)
