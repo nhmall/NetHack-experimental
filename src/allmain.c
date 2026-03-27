@@ -13,6 +13,7 @@
 
 staticfn void moveloop_preamble(boolean);
 staticfn void u_calc_moveamt(int);
+
 staticfn void maybe_do_tutorial(void);
 #ifdef POSITIONBAR
 staticfn void do_positionbar(void);
@@ -511,11 +512,6 @@ moveloop_core(void)
         return;
     }
 
-#ifdef CLIPPING
-    /* just before rhack */
-    cliparound(u.ux, u.uy);
-#endif
-
     u.umoved = FALSE;
 
     if (gm.multi > 0) {
@@ -546,6 +542,11 @@ moveloop_core(void)
 
     if (gv.vision_full_recalc)
         vision_recalc(0); /* vision! */
+#ifdef CLIPPING
+    /* after rhack() and vision_recalc() so that the map is redrawn
+       once with correct vision data, not twice (overshoot+correct) */
+    cliparound(u.ux, u.uy);
+#endif
     /* when running in non-tport mode, this gets done through domove() */
     if ((!svc.context.run || flags.runmode == RUN_TPORT)
         && (gm.multi && (!svc.context.travel ? !(gm.multi % 7)
@@ -606,6 +607,9 @@ regen_pw(int wtcap)
                               * (Role_if(PM_WIZARD) ? 3 : 4)
                               / 6)))) || Energy_regeneration)) {
         int upper = (int) (ACURR(A_WIS) + ACURR(A_INT)) / 15 + 1;
+
+        if (EMagical_breathing)
+            upper += 2;
 
         u.uen += rn1(upper, 1);
         if (u.uen > u.uenmax)
