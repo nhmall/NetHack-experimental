@@ -17,6 +17,10 @@
 #ifdef CROSS_TO_AMIGA
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <dos/dos.h>
+#include <clib/dos_protos.h>
+#include <proto/dos.h>
 #endif
 
 #ifdef __SASC_60    /* since SAS can prevent re-inclusion */
@@ -48,13 +52,9 @@ typedef long off_t;
 #define PATHLEN 130
 
 /* data librarian defs */
-#ifndef NOCWD_ASSUMPTIONS
-#define DLBFILE "NetHack:nhdat"   /* main library */
-#define DLBFILE2 "NetHack:nhsdat" /* sound library */
-#else
 #define DLBFILE "nhdat"   /* main library */
-#define DLBFILE2 "nhsdat" /* sound library */
-#endif
+/* nhsdat sound library not used in 3.7 */
+#undef DLBFILE2
 
 #ifndef CROSS_TO_AMIGA
 #define FILENAME_CMP stricmp /* case insensitive */
