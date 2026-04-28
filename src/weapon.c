@@ -405,7 +405,7 @@ special_dmgval(
         }
 
     /* when no gloves we check for silver rings (blessed rings ignored) */
-    } else if ((left_ring || right_ring) && magr == &gy.youmonst) {
+    } else if ((left_ring || right_ring) && magr == u.umonst) {
         if (left_ring && uleft) {
             if (objects[uleft->otyp].oc_material == SILVER
                 && mon_hates_silver(mdef)) {
@@ -1330,7 +1330,7 @@ enhance_weapon_skill(void)
     boolean speedy = FALSE;
 
     /* player knows about #enhance, don't show tip anymore */
-    svc.context.tips[TIP_ENHANCE] = TRUE;
+    svc.context.tips |= (1 << TIP_ENHANCE);
 
     if (wizard && y_n("Advance skills without practice?") == 'y')
         speedy = TRUE;

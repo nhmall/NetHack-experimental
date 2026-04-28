@@ -6,6 +6,7 @@
 #include "hack.h"
 #include "mfndpos.h"
 
+staticfn void pet_sanity_check(struct monst *, const char *);
 staticfn void sanity_check_single_mon(struct monst *, boolean, const char *);
 staticfn struct obj *make_corpse(struct monst *, unsigned);
 staticfn int minliquid_core(struct monst *);
@@ -45,14 +46,28 @@ extern const struct shclass shtypes[]; /* defined in shknam.c */
      || !svl.level.flags.deathdrops    \
      || (svl.level.flags.graveyard && is_undead(mdat) && rn2(3)))
 
-
-#if 0
+#if 0   /* potentially of historical interest */
 /* part of the original warning code which was replaced in 3.3.1 */
 const char *warnings[] = {
     "white", "pink", "red", "ruby", "purple", "black"
 };
 #endif /* 0 */
 
+staticfn void
+pet_sanity_check(
+    struct monst *mtmp,
+    const char *msgarg)
+{
+    if (has_edog(mtmp)) {
+        struct edog *edog = EDOG(mtmp);
+
+        if (edog->droptime > svm.moves)
+            impossible("insane pet #%u has droptime (%ld)"
+                       " in the future (%ld) (%s)",
+                       mtmp->m_id, edog->droptime, svm.moves, msgarg);
+        /* TODO: verify some of the other edog fields */
+    }
+}
 
 staticfn void
 sanity_check_single_mon(
@@ -116,8 +131,12 @@ sanity_check_single_mon(
     if (mtmp->isminion && !has_emin(mtmp))
         impossible("minion without emin (%s)", msg);
     /* guardian angel on astral level is tame but has emin rather than edog */
-    if (mtmp->mtame && !has_edog(mtmp) && !mtmp->isminion)
-        impossible("pet without edog (%s)", msg);
+    if (mtmp->mtame) {
+        if (!has_edog(mtmp) && !mtmp->isminion)
+            impossible("pet without edog (%s)", msg);
+        else
+            pet_sanity_check(mtmp, msg);
+    }
     /* steed should be tame and saddled */
     if (mtmp == u.usteed) {
         const char *ns, *nt = !mtmp->mtame ? "not tame" : 0;
@@ -133,7 +152,7 @@ sanity_check_single_mon(
 
     if (mtmp->mtrapped) {
         if (mtmp->wormno) {
-            /* TODO: how to check worm in trap? */
+            ; /* TODO: how to check worm in trap? */
         } else if (!t_at(mx, my))
             impossible("trapped without a trap (%s)", msg);
     }
@@ -311,7 +330,7 @@ int
 m_poisongas_ok(struct monst *mtmp)
 {
     int px, py;
-    boolean is_you = (mtmp == &gy.youmonst);
+    boolean is_you = (mtmp == u.umonst);
 
     /* Non living, non breathing, immune monsters are not concerned */
     if (nonliving(mtmp->data) || is_vampshifter(mtmp)
@@ -2085,8 +2104,8 @@ mon_allowflags(struct monst *mtmp)
     if (passes_bars(mtmp->data)
         /* restrict engulfer or holder who might try to pass iron bars while
            carrying hero; accept small subset for poly'd hero passes_bars() */
-        && (mtmp != u.ustuck || (unsolid(gy.youmonst.data)
-                                 || verysmall(gy.youmonst.data))))
+        && (mtmp != u.ustuck || (unsolid(u.umonst->data)
+                                 || verysmall(u.umonst->data))))
         allowflags |= ALLOW_BARS;
 #if 0   /* can't do this here; leave it for mfndpos() */
     if (is_displacer(mtmp->data))
@@ -2391,6 +2410,8 @@ mm_2way_aggression(struct monst *magr, struct monst *mdef)
        them waking up early (e.g. because a zombie decided to attack the
        Wizard of Yendor). */
     if (zombie_maker(magr) && zombie_form(mdef->data) != NON_PM) {
+        if (magr->mgenmklev && mdef->mgenmklev)
+            return 0L;
         if (!Is_stronghold(&u.uz)
             && !unique_corpstat(magr->data) && !unique_corpstat(mdef->data))
             return (ALLOW_M | ALLOW_TM);
@@ -3188,7 +3209,7 @@ corpse_chance(
             if (was_swallowed && magr) {
                 /* mdef is a gas spore (AT_BOOM) that is exploding inside an
                    engulfer; suppress usual explosion since it's contained */
-                if (magr == &gy.youmonst) {
+                if (magr == u.umonst) {
                     There("is an explosion in your %s!", body_part(STOMACH));
                     Sprintf(svk.killer.name, "%s explosion",
                             s_suffix(pmname(mdat, Mgender(mon))));
@@ -3596,7 +3617,7 @@ xkilled(
         /* corpse--none if hero was inside the monster */
         if (!wasinside && corpse_chance(mtmp, (struct monst *) 0, FALSE)) {
             gz.zombify = (!gt.thrownobj && !gs.stoned && !uwep
-                         && zombie_maker(&gy.youmonst)
+                         && zombie_maker(u.umonst)
                          && zombie_form(mtmp->data) != NON_PM);
             cadaver = make_corpse(mtmp, burycorpse ? CORPSTAT_BURIED
                                                    : CORPSTAT_NONE);
@@ -4574,7 +4595,7 @@ get_iter_mons_xy(
 int
 healmon(struct monst *mtmp, int amt, int overheal)
 {
-    if (mtmp == &gy.youmonst) {
+    if (mtmp == u.umonst) {
         int oldhp = Upolyd ? u.mh : u.uhp;
         healup(amt, 0, 0, 0);
         return (Upolyd ? u.mh : u.uhp) - oldhp;
@@ -4683,7 +4704,7 @@ maybe_unhide_at(coordxy x, coordxy y)
         undetected = mtmp->mundetected;
         trapped = mtmp->mtrapped;
     } else if (u_at(x, y)) {
-        mtmp = &gy.youmonst;
+        mtmp = u.umonst;
         undetected = u.uundetected;
         trapped = u.utrap;
     } else {
@@ -4709,7 +4730,7 @@ hideunder(struct monst *mtmp)
     const char *seenmon = (char *) 0, *seenobj = (char *) 0,
                *locomo = (char *) 0;
     int seeit = gi.in_mklev ? 0 : canseemon(mtmp);
-    boolean oldundetctd, undetected = FALSE, is_u = (mtmp == &gy.youmonst);
+    boolean oldundetctd, undetected = FALSE, is_u = (mtmp == u.umonst);
     coordxy x = is_u ? u.ux : mtmp->mx, y = is_u ? u.uy : mtmp->my;
 
     if (mtmp == u.ustuck) {
@@ -4857,8 +4878,10 @@ decide_to_shapeshift(struct monst *mon)
 
     if (!is_vampshifter(mon)) {
         /* regular shapeshifter; 'ptr' is Null */
-        if (!rn2(6))
+        if (!mon->mspec_used && !rn2(6)) {
             dochng = TRUE;
+            mon->mspec_used = 3 + rn2(10);
+        }
     } else if (!(mon->mstrategy & STRAT_WAITFORU)) {
         /* The vampire has to be in good health (mhp) to maintain
          * its shifted form.
@@ -5414,7 +5437,7 @@ newcham(
                 /* update swallow glyphs for new monster */
                 swallowed(0);
             }
-        } else if ((!sticks(mdat) && !sticks(gy.youmonst.data))
+        } else if ((!sticks(mdat) && !sticks(u.umonst->data))
                    /* sticky hero can't continue to hold mtmp if it has
                       turned into a non-solid creature; we don't use
                       uunstick() for that because its message would be
@@ -5777,7 +5800,7 @@ usmellmon(struct permonst *mdat)
     boolean msg_given = FALSE;
 
     if (mdat) {
-        if (!olfaction(gy.youmonst.data))
+        if (!olfaction(u.umonst->data))
             return FALSE;
         mndx = monsndx(mdat);
         switch (mndx) {
@@ -5872,7 +5895,7 @@ usmellmon(struct permonst *mdat)
                 msg_given = TRUE;
                 break;
             case S_ORC:
-                if (maybe_polyd(is_orc(gy.youmonst.data), Race_if(PM_ORC)))
+                if (maybe_polyd(is_orc(u.umonst->data), Race_if(PM_ORC)))
                     You("notice an attractive smell.");
                 else
                     pline("A foul stench makes you feel a little nauseated.");
@@ -6054,4 +6077,12 @@ flash_mon(struct monst *mtmp)
     gv.viz_array[my][mx] = saveviz;
     newsym(mx, my);
 }
+
+/* cleanup for 'onefile' processing */
+#undef LEVEL_SPECIFIC_NOCORPSE
+#undef KEEPTRAITS
+#undef mstoning
+#undef livelog_mon_nam
+#undef BREEDER_EGG
+
 /*mon.c*/

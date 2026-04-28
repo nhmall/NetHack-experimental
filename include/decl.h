@@ -725,7 +725,8 @@ struct instance_globals_o {
 
     /* options.c */
 
-    int opt_phase; /* builtin_opt, syscf_, rc_file_, environ_, play_opt */
+    /* builtin_opt, syscf_, rc_file_, environ_, play_opt */
+    enum option_phases opt_phase;
     boolean opt_initial;
     boolean opt_from_file;
     boolean opt_need_redraw; /* for doset() */
@@ -1081,7 +1082,6 @@ struct instance_globals_y {
 
     /* decl.c */
     int y_maze_max;
-    struct monst youmonst;
 
     /* pline.c */
     /* work buffer for You(), &c and verbalize() */
@@ -1174,6 +1174,8 @@ struct instance_globals_saved_m {
 struct instance_globals_saved_n {
     /* dungeon.c */
     int n_dgns; /* number of dungeons (also used in mklev.c and do.c) */
+    /* files.c */
+    char nhuuid[37];
     /* mkroom.c */
     int nroom;
     /* region.c */
