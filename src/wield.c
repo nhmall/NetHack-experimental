@@ -103,10 +103,15 @@ setuwep(struct obj *obj)
 
     if (obj == uwep)
         return; /* necessary to not set gu.unweapon */
-    /* This message isn't printed in the caller because it happens
-     * *whenever* Sunsword is unwielded, from whatever cause.
-     */
     setworn(obj, W_WEP);
+    /* handle Ogresmasher before Sunsword; even though they can't be happening
+       at the same time, botl flag update should come before pline message */
+    if (uwep == obj
+        && ((uwep && uwep->oartifact == ART_OGRESMASHER)
+            || (olduwep && olduwep->oartifact == ART_OGRESMASHER)))
+        disp.botl = TRUE; /* gaining or losing Con bonus */
+    /* This message isn't printed in the caller because it happens
+     * *whenever* Sunsword is unwielded, from whatever cause. */
     if (uwep == obj && artifact_light(olduwep) && olduwep->lamplit) {
         end_burn(olduwep, FALSE);
         if (!Blind)
@@ -153,7 +158,7 @@ const char *
 empty_handed(void)
 {
     return uarmg ? "empty handed" /* gloves imply hands */
-           : humanoid(gy.youmonst.data)
+           : humanoid(u.umonst->data)
              /* hands but no weapon and no gloves */
              ? "bare handed"
                /* alternate phrasing for paws or lack of hands */
@@ -355,7 +360,7 @@ dowield(void)
 
     /* May we attempt this? */
     gm.multi = 0;
-    if (cantwield(gy.youmonst.data)) {
+    if (cantwield(u.umonst->data)) {
         pline("Don't be ridiculous!");
         return ECMD_FAIL;
     }
@@ -460,7 +465,7 @@ doswapweapon(void)
 
     /* May we attempt this? */
     gm.multi = 0;
-    if (cantwield(gy.youmonst.data)) {
+    if (cantwield(u.umonst->data)) {
         pline("Don't be ridiculous!");
         return ECMD_FAIL;
     }
@@ -711,7 +716,7 @@ wield_tool(struct obj *obj,
         }
         return FALSE;
     }
-    if (cantwield(gy.youmonst.data)) {
+    if (cantwield(u.umonst->data)) {
         You_cant("hold %s strongly enough.", more_than_1 ? "them" : "it");
         return FALSE;
     }
@@ -757,7 +762,7 @@ can_twoweapon(void)
 {
     struct obj *otmp;
 
-    if (!could_twoweap(gy.youmonst.data)) {
+    if (!could_twoweap(u.umonst->data)) {
         if (Upolyd)
             You_cant("use two weapons in your current form.");
         else
@@ -828,7 +833,11 @@ drop_uswapwep(void)
 void
 set_twoweap(boolean on_off)
 {
-    u.twoweap = on_off;
+    if (on_off != u.twoweap) {
+        u.twoweap = on_off;
+        if (flags.weaponstatus)
+            disp.botl = TRUE;
+    }
 }
 
 /* the #twoweapon command */

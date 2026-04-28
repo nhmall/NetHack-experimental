@@ -67,8 +67,8 @@ enum m_ap_types {
 
 #define M_AP_TYPMASK  0x7
 #define M_AP_F_DKNOWN 0x8
-#define U_AP_TYPE (gy.youmonst.m_ap_type & M_AP_TYPMASK)
-#define U_AP_FLAG (gy.youmonst.m_ap_type & ~M_AP_TYPMASK)
+#define U_AP_TYPE (u.umonst->m_ap_type & M_AP_TYPMASK)
+#define U_AP_FLAG (u.umonst->m_ap_type & ~M_AP_TYPMASK)
 #define M_AP_TYPE(m) ((m)->m_ap_type & M_AP_TYPMASK)
 #define M_AP_FLAG(m) ((m)->m_ap_type & ~M_AP_TYPMASK)
 
@@ -163,7 +163,8 @@ struct monst {
 
     Bitfield(mspotted, 1);  /* mon is currently seen by hero */
     Bitfield(mwandexp, 1);  /* mon has experience with wands */
-    /* 6 spare bits */
+    Bitfield(mgenmklev, 1); /* made by the level generation */
+    /* 5 spare bits */
 
     unsigned long mstrategy; /* for monsters with mflag3: current strategy */
 #ifdef NHSTDC

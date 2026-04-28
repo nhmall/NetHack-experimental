@@ -31,7 +31,8 @@ staticfn void save_gamelog(NHFILE *);
 staticfn void savegamestate(NHFILE *);
 staticfn void savelev_core(NHFILE *, xint8);
 staticfn void save_msghistory(NHFILE *);
-
+staticfn void save_u(NHFILE *);
+staticfn void save_adjust_levelflags(void);
 #if defined(HANGUPHANDLING)
 #define HUP if (!program_state.done_hup)
 #else
@@ -262,6 +263,27 @@ save_gamelog(NHFILE *nhfp)
 }
 
 staticfn void
+save_u(NHFILE *nhfp)
+{
+    struct monst *save_umonst;
+
+    urealtime.finish_time = getnow();
+    urealtime.realtime += timet_delta(urealtime.finish_time,
+                                      urealtime.start_timing);
+
+    save_umonst = u.umonst;
+    u.umonst = (struct monst *) 0;
+    Sfo_you(nhfp, &u, "gamestate-you");
+    u.umonst = save_umonst;
+
+    Sfo_char(nhfp, yyyymmddhhmmss(ubirthday), "gamestate-ubirthday", 14);
+    Sfo_long(nhfp, &urealtime.realtime, "gamestate-realtime");
+    Sfo_char(nhfp, yyyymmddhhmmss(urealtime.start_timing), "gamestate-start_timing", 14);
+    /* this is the value to use for the next update of urealtime.realtime */
+    urealtime.start_timing = urealtime.finish_time;
+}
+
+staticfn void
 savegamestate(NHFILE *nhfp)
 {
     int i;
@@ -270,17 +292,15 @@ savegamestate(NHFILE *nhfp)
     program_state.saving++; /* caller should/did already set this... */
     uid = (unsigned long) getuid();
     Sfo_ulong(nhfp, &uid, "gamestate-uid");
+    Sfo_char(nhfp, &svn.nhuuid[0], "nhuuid", sizeof svn.nhuuid);
+    Sfo_long(nhfp, &svm.moves, "gamestate-moves");
+    moves_to_relative_time(&svc.context.seer_turn);
+    moves_to_relative_time(&svc.context.digging.lastdigtime);
     Sfo_context_info(nhfp, &svc.context, "gamestate-context");
+    relative_time_to_moves(&svc.context.seer_turn);
+    relative_time_to_moves(&svc.context.digging.lastdigtime);
     Sfo_flag(nhfp, &flags, "gamestate-flags");
-    urealtime.finish_time = getnow();
-    urealtime.realtime += timet_delta(urealtime.finish_time,
-                                      urealtime.start_timing);
-    Sfo_you(nhfp, &u, "gamestate-you");
-    Sfo_char(nhfp, yyyymmddhhmmss(ubirthday), "gamestate-ubirthday", 14);
-    Sfo_long(nhfp, &urealtime.realtime, "gamestate-realtime");
-    Sfo_char(nhfp, yyyymmddhhmmss(urealtime.start_timing), "gamestate-start_timing", 14);
-    /* this is the value to use for the next update of urealtime.realtime */
-    urealtime.start_timing = urealtime.finish_time;
+    save_u(nhfp);
     save_killers(nhfp);
 
     /* must come before gm.migrating_objs and gm.migrating_mons are freed */
@@ -304,7 +324,6 @@ savegamestate(NHFILE *nhfp)
     save_dungeon(nhfp, (boolean) !!update_file(nhfp),
                  (boolean) !!release_data(nhfp));
     savelevchn(nhfp);
-    Sfo_long(nhfp, &svm.moves, "gamestate-moves");
     Sfo_q_score(nhfp, &svq.quest_status, "gamestate-quest_status");
     for (i = 0; i < (MAXSPELL + 1); ++i) {
         Sfo_spell(nhfp, &svs.spl_book[i], "gamestate-spl_book");
@@ -509,7 +528,9 @@ savelev_core(NHFILE *nhfp, xint8 lev)
     save_stairs(nhfp);
     Sfo_dest_area(nhfp, &svu.updest, "lev-updest");
     Sfo_dest_area(nhfp, &svd.dndest, "lev-dndest");
+    save_adjust_levelflags();
     Sfo_levelflags(nhfp, &svl.level.flags, "lev-level_flags");
+    rest_adjust_levelflags();
 
     Sfo_int(nhfp, &svd.doors_alloc, "lev-doors_alloc");
     /* don't rely on underlying write() behavior to write
@@ -554,6 +575,13 @@ savelev_core(NHFILE *nhfp, xint8 lev)
         (void) memset(svr.rooms, 0, sizeof(svr.rooms));
     }
     return;
+}
+
+void
+save_adjust_levelflags(void)
+{
+    /* adjust any timestamps */
+    moves_to_relative_time(&svl.level.flags.stasis_until);
 }
 
 staticfn void
@@ -844,7 +872,12 @@ savemon(NHFILE *nhfp, struct monst *mtmp)
         buflen = EDOG(mtmp) ? (int) sizeof (struct edog) : 0;
         Sfo_int(nhfp, &buflen, "monst-edog_length");
         if (buflen > 0) {
+            /* we only store relative times in save and bones */
+            moves_to_relative_time(&EDOG(mtmp)->droptime);
+            moves_to_relative_time(&EDOG(mtmp)->hungrytime);
             Sfo_edog(nhfp, EDOG(mtmp), "monst-edog");
+            relative_time_to_moves(&EDOG(mtmp)->droptime);
+            relative_time_to_moves(&EDOG(mtmp)->hungrytime);
         }
         buflen = EBONES(mtmp) ? (int) sizeof (struct ebones) : 0;
         Sfo_int(nhfp, &buflen, "monst-ebones_length");
@@ -1145,12 +1178,16 @@ freedynamicdata(void)
     release_runtime_info(); /* build-time options and version stuff */
     free_convert_filenames();
 #endif /* FREE_ALL_MEMORY */
+    free_nhuuid();
 
     if (VIA_WINDOWPORT())
         status_finish();
 
     if (options_set_window_colors_flag)
         options_free_window_colors();
+
+    if (u.umonst)
+        free((genericptr_t) u.umonst), u.umonst = 0;
 
     if (glyphid_cache_status())
         free_glyphid_cache();

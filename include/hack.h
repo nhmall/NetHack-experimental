@@ -464,7 +464,7 @@ enum encumbrance_types {
 };
 
 struct entity {
-    struct monst *emon;     /* youmonst for the player */
+    struct monst *emon;     /* u.umonst for the player */
     struct permonst *edata; /* must be non-zero for record to be valid */
     int ex, ey;
 };
@@ -588,6 +588,13 @@ enum inventory_counts {
     /* 2023/11/30 invlet_max is not yet used anywhere */
 };
 
+#ifndef IDLECHECKPOINT_WAIT_TIME
+#define IDLECHECKPOINT_WAIT_TIME 10  /* seconds to wait before executing a checkpoint;
+                                      * always #define'd but only has meaning if
+                                      * IDLECHECKPOINT is defined.
+                                      */
+#endif
+
 struct kinfo {
     struct kinfo *next; /* chain of delayed killers */
     int id;             /* uprop keys to ID a delayed killer */
@@ -702,22 +709,6 @@ enum nhcb_calls {
     NUM_NHCB
 };
 
-/*
- * option setting restrictions
- */
-
-enum optset_restrictions {
-    set_in_sysconf = 0, /* system config file option only */
-    set_in_config  = 1, /* config file option only */
-    set_viaprog    = 2, /* may be set via extern program, not seen in game */
-    set_gameview   = 3, /* may be set via extern program, displayed in game */
-    set_in_game    = 4, /* may be set via extern program or set in the game */
-    set_wizonly    = 5, /* may be set in the game if wizmode */
-    set_wiznofuz   = 6, /* wizard-mode only, but not by fuzzer */
-    set_hidden     = 7  /* placeholder for prefixed entries, never show it  */
-};
-#define SET__IS_VALUE_VALID(s) ((s < set_in_sysconf) || (s > set_wiznofuz))
-
 struct plinemsg_type {
     xint16 msgtype;  /* one of MSGTYP_foo */
     struct nhregex *regex;
@@ -817,6 +808,7 @@ struct sinfo {
        interface to suppress menu commands in similar conditions;
        readchar() always resets it to 'otherInp' prior to returning */
     int input_state; /* whether next key pressed will be entering a command */
+    int early_options; /* inside early_options processing */
 #ifdef TTY_GRAPHICS
     /* resize_pending only matters when handling a SIGWINCH signal for tty;
        getting_char is used along with that and also separately for UNIX;
@@ -1299,7 +1291,7 @@ typedef uint32_t mmflags_nht;     /* makemon MM_ flags */
 #define FM_FMON 0x01    /* search the fmon chain */
 #define FM_MIGRATE 0x02 /* search the migrating monster chain */
 #define FM_MYDOGS 0x04  /* search gm.mydogs */
-#define FM_YOU 0x08     /* check for gy.youmonst */
+#define FM_YOU 0x08     /* check for u.umonst */
 #define FM_EVERYWHERE (FM_YOU | FM_FMON | FM_MIGRATE | FM_MYDOGS)
 
 /* Flags to control pick_[race,role,gend,align] routines in role.c */

@@ -137,6 +137,9 @@ setworn(struct obj *obj, long mask)
         /* tux -> tuxedo -> "monkey suit" -> monk's suit */
         iflags.tux_penalty = (uarm && Role_if(PM_MONK) && gu.urole.spelarmr);
     }
+    if ((flags.weaponstatus && (mask & W_WEP) != 0L)
+        || (flags.armorstatus && (mask & W_ARMOR) != 0L))
+        disp.botl = TRUE;
     update_inventory();
     recalc_telepat_range();
 }
@@ -148,6 +151,7 @@ setnotworn(struct obj *obj)
 {
     const struct worn *wp;
     int p;
+    long unworn = 0L;
 
     if (!obj)
         return;
@@ -160,6 +164,7 @@ setnotworn(struct obj *obj)
             cancel_doff(obj, wp->w_mask);
 
             *(wp->w_obj) = (struct obj *) 0;
+            unworn |= wp->w_mask;
             p = objects[obj->otyp].oc_oprop;
             u.uprops[p].extrinsic = u.uprops[p].extrinsic & ~wp->w_mask;
             monstunseesu_prop(p); /* remove this extrinsic from seenres */
@@ -171,6 +176,9 @@ setnotworn(struct obj *obj)
         }
     if (!uarm)
         iflags.tux_penalty = FALSE;
+    if ((flags.weaponstatus && (unworn & W_WEP) != 0L)
+        || (flags.armorstatus && (unworn & W_ARMOR) != 0L))
+        disp.botl = TRUE;
     update_inventory();
     recalc_telepat_range();
 }
@@ -451,7 +459,7 @@ check_wornmask_slots(void)
             why = "uswapwep is not a melee weapon";
         else if (bimanual(uswapwep))
             why = "uswapwep is two-handed";
-        else if (!could_twoweap(gy.youmonst.data))
+        else if (!could_twoweap(u.umonst->data))
             why = "without two weapon attacks";
 
         if (why)
@@ -997,7 +1005,7 @@ m_dowear_type(
 struct obj *
 which_armor(struct monst *mon, long flag)
 {
-    if (mon == &gy.youmonst) {
+    if (mon == u.umonst) {
         switch (flag) {
         case W_ARM:
             return uarm;

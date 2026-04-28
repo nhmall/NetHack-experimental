@@ -11,15 +11,32 @@ enum mcast_spells {
 };
 #undef MCASTU_ENUM
 
+struct _mcast_data {
+    int level;
+    int flags;
+};
+
 #define MCASTU_INIT
-static int mcast_flags[] = {
+static struct _mcast_data mcast_data[] = {
     #include "mcastu.h"
 };
 #undef MCASTU_INIT
 
+/* spell lists for specific monster casters */
+/* the spells in the list should be in ascending level order */
+static int mon_cleric_spells[] = {
+    MCAST_OPEN_WOUNDS, MCAST_CURE_SELF, MCAST_CONFUSE_YOU, MCAST_PARALYZE,
+    MCAST_BLIND_YOU, MCAST_INSECTS, MCAST_CURSE_ITEMS, MCAST_LIGHTNING,
+    MCAST_FIRE_PILLAR, MCAST_GEYSER
+};
+static int mon_wizard_spells[] = {
+    MCAST_PSI_BOLT, MCAST_CURE_SELF, MCAST_HASTE_SELF, MCAST_STUN_YOU,
+    MCAST_DISAPPEAR, MCAST_WEAKEN_YOU, MCAST_DESTRY_ARMR, MCAST_CURSE_ITEMS,
+    MCAST_AGGRAVATION, MCAST_SUMMON_MONS, MCAST_CLONE_WIZ, MCAST_DEATH_TOUCH
+};
+
 staticfn void cursetxt(struct monst *, boolean);
-staticfn int choose_magic_spell(struct monst *);
-staticfn int choose_clerical_spell(struct monst *);
+staticfn int choose_monster_spell(struct monst *, int);
 staticfn int m_cure_self(struct monst *, int);
 staticfn void mcast_death_touch(struct monst *);
 staticfn void mcast_clone_wiz(struct monst *);
@@ -52,7 +69,7 @@ cursetxt(struct monst *mtmp, boolean undirected)
             point_msg = "all around, then curses";
         else if ((Invis && !perceives(mtmp->data)
                   && (mtmp->mux != u.ux || mtmp->muy != u.uy))
-                 || is_obj_mappear(&gy.youmonst, STRANGE_OBJECT)
+                 || is_obj_mappear(u.umonst, STRANGE_OBJECT)
                  || u.uundetected)
             point_msg = "and curses in your general direction";
         else if (Displaced && (mtmp->mux != u.ux || mtmp->muy != u.uy))
@@ -67,107 +84,42 @@ cursetxt(struct monst *mtmp, boolean undirected)
     }
 }
 
-/* convert a level-based random selection into a specific mage spell;
-   inappropriate choices will be screened out by spell_would_be_useless() */
+/* choose a spell for monster to cast */
 staticfn int
-choose_magic_spell(struct monst *mtmp)
+choose_monster_spell(struct monst *mtmp, int adtyp)
 {
-    int spellval = rn2(mtmp->m_lev);
+    int *list = NULL;
+    int i, spellval, len = 0;
+    int maxlev;
 
-    /* for 3.4.3 and earlier, val greater than 22 selected default spell */
-    while (spellval > 24 && rn2(25))
-        spellval = rn2(spellval);
+    /* which spell list to use? */
+    if (adtyp == AD_SPEL) {
+        list = mon_wizard_spells;
+        len = SIZE(mon_wizard_spells);
+    } else if (adtyp == AD_CLRC) {
+        list = mon_cleric_spells;
+        len = SIZE(mon_cleric_spells);
+    }
 
-    switch (spellval) {
-    case 24:
-    case 23:
-        if (Antimagic || Hallucination)
-            return MCAST_PSI_BOLT;
-        FALLTHROUGH;
-        /*FALLTHRU*/
-    case 22:
-    case 21:
-    case 20:
-        return MCAST_DEATH_TOUCH;
-    case 19:
-    case 18:
-        return MCAST_CLONE_WIZ;
-    case 17:
-    case 16:
-    case 15:
-        return MCAST_SUMMON_MONS;
-    case 14:
-    case 13:
-        return MCAST_AGGRAVATION;
-    case 12:
-    case 11:
-    case 10:
-        return MCAST_CURSE_ITEMS;
-    case 9:
-    case 8:
-        return MCAST_DESTRY_ARMR;
-    case 7:
-    case 6:
-        return MCAST_WEAKEN_YOU;
-    case 5:
-    case 4:
-        return MCAST_DISAPPEAR;
-    case 3:
-        return MCAST_STUN_YOU;
-    case 2:
-        return MCAST_HASTE_SELF;
-    case 1:
-        return MCAST_CURE_SELF;
-    case 0:
-    default:
+    if (!list || len < 1)
         return MCAST_PSI_BOLT;
-    }
-}
 
-/* convert a level-based random selection into a specific cleric spell */
-staticfn int
-choose_clerical_spell(struct monst *mtmp)
-{
-    int spellnum = rn2(mtmp->m_lev);
+    /* max spell level in this monster spell list */
+    maxlev = mcast_data[list[len - 1]].level;
 
-    /* for 3.4.3 and earlier, num greater than 13 selected the default spell
-     */
-    while (spellnum > 15 && rn2(16))
-        spellnum = rn2(spellnum);
+    /* which level spell to cast? */
+    spellval = rn2(mtmp->m_lev);
+    if (spellval > maxlev && rn2(maxlev))
+        spellval = rn2(maxlev);
 
-    switch (spellnum) {
-    case 15:
-    case 14:
-        if (rn2(3))
-            return MCAST_OPEN_WOUNDS;
-        FALLTHROUGH;
-        /*FALLTHRU*/
-    case 13:
-        return MCAST_GEYSER;
-    case 12:
-        return MCAST_FIRE_PILLAR;
-    case 11:
-        return MCAST_LIGHTNING;
-    case 10:
-    case 9:
-        return MCAST_CURSE_ITEMS;
-    case 8:
-        return MCAST_INSECTS;
-    case 7:
-    case 6:
-        return MCAST_BLIND_YOU;
-    case 5:
-    case 4:
-        return MCAST_PARALYZE;
-    case 3:
-    case 2:
-        return MCAST_CONFUSE_YOU;
-    case 1:
-        return MCAST_CURE_SELF;
-    case 0:
-    default:
-        return MCAST_OPEN_WOUNDS;
-    }
+    /* find the highest spell in the list we could cast */
+    for (i = len-1; i >= 0; i--)
+        if (mcast_data[list[i]].level <= spellval
+            && !spell_would_be_useless(mtmp, list[i]))
+            return list[i];
+
+    /* or return the first spell in the list */
+    return list[0];
 }
 
 /* return values:
@@ -201,10 +153,7 @@ castmu(
         int cnt = 40;
 
         do {
-            if (mattk->adtyp == AD_SPEL)
-                spellnum = choose_magic_spell(mtmp);
-            else
-                spellnum = choose_clerical_spell(mtmp);
+            spellnum = choose_monster_spell(mtmp, mattk->adtyp);
             /* not trying to attack?  don't allow directed spells */
             if (!thinks_it_foundyou) {
                 if (!is_undirected_spell(spellnum)
@@ -440,7 +389,7 @@ staticfn void
 mcast_death_touch(struct monst *mtmp)
 {
     pline("Oh no, %s's using the touch of death!", mhe(mtmp));
-    if (nonliving(gy.youmonst.data) || is_demon(gy.youmonst.data)) {
+    if (nonliving(u.umonst->data) || is_demon(u.umonst->data)) {
         You("seem no deader than before.");
     } else if (!Antimagic && rn2(mtmp->m_lev) > 12) {
         if (Hallucination) {
@@ -604,9 +553,9 @@ mcast_fire_pillar(struct monst *mtmp, int dmg)
     if (Half_spell_damage)
         dmg = (dmg + 1) / 2;
     burn_away_slime();
-    (void) burnarmor(&gy.youmonst);
+    (void) burnarmor(u.umonst);
     /* item destruction dmg */
-    (void) destroy_items(&gy.youmonst, AD_FIRE, orig_dmg);
+    (void) destroy_items(u.umonst, AD_FIRE, orig_dmg);
     ignite_items(gi.invent);
     /* burn up flammable items on the floor, melt ice terrain */
     mon_spell_hits_spot(mtmp, AD_FIRE, u.ux, u.uy);
@@ -637,7 +586,7 @@ mcast_lightning(struct monst *mtmp, int dmg)
     }
     if (Half_spell_damage)
         dmg = (dmg + 1) / 2;
-    (void) destroy_items(&gy.youmonst, AD_ELEC, orig_dmg);
+    (void) destroy_items(u.umonst, AD_ELEC, orig_dmg);
     /* lightning might destroy iron bars if hero is on such a spot;
        reflection protects terrain here [execution won't get here due
        to 'if (reflects) break' above] but hero resistance doesn't;
@@ -781,7 +730,7 @@ mcast_blind_you(void)
 {
     /* note: resists_blnd() doesn't apply here */
     if (!Blinded) {
-        int num_eyes = eyecount(gy.youmonst.data);
+        int num_eyes = eyecount(u.umonst->data);
 
         pline("Scales cover your %s!", (num_eyes == 1)
                                        ? body_part(EYE)
@@ -950,7 +899,7 @@ mcast_spell(struct monst *mtmp, int dmg, int spellnum)
 staticfn boolean
 is_undirected_spell(int spellnum)
 {
-    if ((mcast_flags[spellnum] & MCF_INDIRECT) != 0)
+    if ((mcast_data[spellnum].flags & MCF_INDIRECT) != 0)
         return TRUE;
     return FALSE;
 }
@@ -967,13 +916,13 @@ spell_would_be_useless(struct monst *mtmp, int spellnum)
      */
 
     /* spell is only cast by hostile monsters */
-    if ((mcast_flags[spellnum] & MCF_HOSTILE) != 0) {
+    if ((mcast_data[spellnum].flags & MCF_HOSTILE) != 0) {
         if (mtmp->mpeaceful)
             return TRUE;
     }
 
     /* spell needs the monster to see hero */
-    if ((mcast_flags[spellnum] & MCF_SIGHT) != 0) {
+    if ((mcast_data[spellnum].flags & MCF_SIGHT) != 0) {
         boolean mcouldseeu = couldsee(mtmp->mx, mtmp->my);
 
         if (!mcouldseeu)
@@ -981,6 +930,14 @@ spell_would_be_useless(struct monst *mtmp, int spellnum)
     }
 
     switch (spellnum) {
+    case MCAST_DEATH_TOUCH:
+        if ((Antimagic || Hallucination) && !rn2(2))
+            return TRUE;
+        break;
+    case MCAST_GEYSER:
+        if (!rn2(5))
+            return TRUE;
+        break;
     case MCAST_CLONE_WIZ:
         /* only the Wizard is allowed to clone himself */
         if (!mtmp->iswiz || svc.context.no_of_wizards > 1)
