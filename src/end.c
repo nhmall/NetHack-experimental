@@ -747,7 +747,7 @@ savelife(int how)
         /* might drop hero onto a trap that kills her all over again */
         expels(u.ustuck, u.ustuck->data, TRUE);
     } else if (u.ustuck) {
-        if (Upolyd && sticks(u.umonst->data))
+        if (Upolyd && sticks(gy.youmonst.data))
             You("release %s.", mon_nam(u.ustuck));
         else
             pline("%s releases you.", Monnam(u.ustuck));
@@ -1676,7 +1676,7 @@ nh_terminate(int status)
     program_state.in_moveloop = 0; /* won't be returning to normal play */
 
     l_nhcore_call(NHCORE_GAME_EXIT);
-#ifdef MAC
+#ifdef MACOS9
     getreturn("to exit");
 #endif
     /* don't bother to try to release memory if we're in panic mode, to

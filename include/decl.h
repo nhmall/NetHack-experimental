@@ -840,9 +840,6 @@ struct instance_globals_r {
 
 struct instance_globals_s {
 
-    /* allmain.c */
-    boolean saving_grace_turn; /* saving grace was triggered this turn */
-
     /* artifact.c */
     int spec_dbon_applies; /* coordinate effects from spec_dbon() with
                               messages in artifact_hit() */
@@ -974,9 +971,6 @@ struct instance_globals_t {
 
 struct instance_globals_u {
 
-    /* allmain.c */
-    int uhp_at_start_of_monster_turn;
-
     /* botl.c */
     boolean update_all;
 
@@ -1082,6 +1076,7 @@ struct instance_globals_y {
 
     /* decl.c */
     int y_maze_max;
+    struct monst youmonst;
 
     /* pline.c */
     /* work buffer for You(), &c and verbalize() */
@@ -1175,7 +1170,7 @@ struct instance_globals_saved_n {
     /* dungeon.c */
     int n_dgns; /* number of dungeons (also used in mklev.c and do.c) */
     /* files.c */
-    char nhuuid[37];
+    char nhuuid[NHUUIDSZ];
     /* mkroom.c */
     int nroom;
     /* region.c */
