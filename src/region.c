@@ -1,4 +1,4 @@
-/* NetHack 3.7	region.c	$NHDT-Date: 1727251269 2024/09/25 08:01:09 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.104 $ */
+/* NetHack 5.0	region.c	$NHDT-Date: 1727251269 2024/09/25 08:01:09 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.104 $ */
 /* Copyright (c) 1996 by Jean-Christophe Collet  */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -1092,7 +1092,7 @@ inside_gas_cloud(genericptr_t p1, genericptr_t p2)
 {
     NhRegion *reg = (NhRegion *) p1;
     struct monst *mtmp = (struct monst *) p2;
-    struct monst *umon = mtmp ? mtmp : u.umonst;
+    struct monst *umon = mtmp ? mtmp : &gy.youmonst;
     int dam = reg->arg.a_int;
 
     /*
@@ -1107,8 +1107,8 @@ inside_gas_cloud(genericptr_t p1, genericptr_t p2)
     if (dam < 1)
         return FALSE; /* if no damage then there's nothing to do here... */
 
-    if (!mtmp) { /* hero is indicated by Null rather than by u.umonst */
-        if (m_poisongas_ok(u.umonst) == M_POISONGAS_OK)
+    if (!mtmp) { /* hero is indicated by Null rather than by &youmonst */
+        if (m_poisongas_ok(&gy.youmonst) == M_POISONGAS_OK)
             return FALSE;
         if (!Blind) {
             Your("%s sting.", makeplural(body_part(EYE)));
@@ -1232,7 +1232,7 @@ create_gas_cloud(
        probably a natural cause of being polyed. don't message about it */
     if (!svc.context.mon_moving && u_at(x, y) && cloudsize == 1
         && (!damage
-            || (damage && m_poisongas_ok(u.umonst) == M_POISONGAS_OK)))
+            || (damage && m_poisongas_ok(&gy.youmonst) == M_POISONGAS_OK)))
         inside_cloud = TRUE;
 
     if (cloudsize > MAX_CLOUD_SIZE) {
@@ -1350,7 +1350,7 @@ region_danger(void)
         /* the only type of region we understand is gas_cloud */
         if (f_indx == INSIDE_GAS_CLOUD) {
             /* completely harmless if you don't need to breathe */
-            if (nonliving(u.umonst->data) || Breathless)
+            if (nonliving(gy.youmonst.data) || Breathless)
                 continue;
             /* minor inconvenience if you're poison resistant;
                not harmful enough to be a prayer-level trouble */

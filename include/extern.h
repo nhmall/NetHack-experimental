@@ -1,4 +1,4 @@
-/* NetHack 3.7	extern.h	$NHDT-Date: 1770949988 2026/02/12 18:33:08 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.1523 $ */
+/* NetHack 5.0	extern.h	$NHDT-Date: 1770949988 2026/02/12 18:33:08 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.1523 $ */
 /* Copyright (c) Steve Creps, 1988.                               */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -339,6 +339,7 @@ extern char *get_configfile(void);
 extern const char *get_default_configfile(void);
 extern void rcfile(void);
 extern void rcfile_interface_options(void);
+extern void rcfile_only_this_option(enum opt);
 extern void heed_all_config_statements(void);
 extern void disregard_all_config_statements(void);
 extern void heed_this_config_statement(int);
@@ -346,6 +347,14 @@ extern void disregard_this_config_statement(int);
 extern boolean config_unmatched_ignored(void);
 extern void clear_ignore_errors_on_unmatched(void);
 extern void set_ignore_errors_on_unmatched(void);
+extern void rcfile_only_this_statement(int);
+#ifdef WIN32
+extern boolean check_for_portable_config(void);
+#endif
+#ifdef MSWIN_GRAPHICS
+extern void disregard_some_mswin_options(void);
+extern void rcfile_only_some_mswin_options(void);
+#endif
 
 /* ### coloratt.c ### */
 
@@ -986,7 +995,7 @@ extern void done1(int);
 extern int done2(void);
 extern void done_in_by(struct monst *, int) NONNULLARG1;
 extern void done_object_cleanup(void);
-extern void NH_abort(char *);
+extern void NH_abort(const char *);
 #endif /* !MAKEDEFS_C && MDLIB_C && !CPPREGEX_C */
 #if !defined(CPPREGEX_C)
 ATTRNORETURN extern void panic(const char *, ...) PRINTF_F(1, 2) NORETURN;
@@ -1236,7 +1245,6 @@ extern int monster_nearby(void);
 extern void end_running(boolean);
 extern void nomul(int);
 extern void unmul(const char *);
-extern int saving_grace(int);
 extern void showdamage(int);
 extern void losehp(int, const char *, schar) ;
 extern int weight_cap(void);
@@ -1451,7 +1459,7 @@ extern boolean stumble_on_door_mimic(coordxy, coordxy);
 extern int doopen_indir(coordxy, coordxy);
 extern int doclose(void);
 
-#ifdef MAC
+#ifdef MACOS9
 /* outdated functions removed */
 /* ### macfile.c ### */
 /* ### macmain.c ### */

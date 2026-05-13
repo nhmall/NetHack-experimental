@@ -1,4 +1,4 @@
-/* NetHack 3.7	weapon.c	$NHDT-Date: 1725227810 2024/09/01 21:56:50 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.128 $ */
+/* NetHack 5.0	weapon.c	$NHDT-Date: 1725227810 2024/09/01 21:56:50 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.128 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2011. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -405,7 +405,7 @@ special_dmgval(
         }
 
     /* when no gloves we check for silver rings (blessed rings ignored) */
-    } else if ((left_ring || right_ring) && magr == u.umonst) {
+    } else if ((left_ring || right_ring) && magr == &gy.youmonst) {
         if (left_ring && uleft) {
             if (objects[uleft->otyp].oc_material == SILVER
                 && mon_hates_silver(mdef)) {
@@ -954,14 +954,19 @@ abon(void)
 
     if (Upolyd)
         return (adj_lev(&mons[u.umonnum]) - 3);
+
+    /* this used to be '<= 18/50' for bonus of 1 but got changed to '< 18/50'
+       so that '18/50' gives a bonus of 2; gnome and orc player characters
+       have max Str of 18/50 and giving an extra bonus at that break point
+       provides an incentive for them to max out that characteristic */
     if (str < 6)
         sbon = -2;
     else if (str < 8)
         sbon = -1;
     else if (str < 17)
         sbon = 0;
-    else if (str <= STR18(50))
-        sbon = 1; /* up to 18/50 */
+    else if (str < STR18(50))
+        sbon = 1; /* up to 18/49 */
     else if (str < STR18(100))
         sbon = 2;
     else

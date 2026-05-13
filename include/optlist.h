@@ -1,4 +1,4 @@
-/* NetHack 3.7	optlist.h */
+/* NetHack 5.0	optlist.h */
 /* NetHack may be freely redistributed.  See license for details. */
 
 #ifndef OPTLIST_H
@@ -159,6 +159,10 @@ static int optfn_##a(int, int, boolean, char *, char *);
     NHOPTB(altmeta, Advanced, 0, opt_out, set_in_game,
            Off, Yes, No, No, NoAlias, &iflags.altmeta, Term_False,
            "treat \"ESC c\" as M-c (Meta+c, 8th bit set)")
+#elif defined(AMIGA_INTUITION)
+    NHOPTB(altmeta, Advanced, 0, opt_out, set_in_game,
+           On, Yes, No, No, NoAlias, &sysflags.altmeta, Term_False,
+           "treat ALT+c as M-c (Meta+c, 8th bit set)")
 #else
     NHOPTB(altmeta, Advanced, 0, opt_out, set_in_config,
            Off, Yes, No, No, NoAlias, (boolean *) 0, Term_False,
@@ -357,7 +361,7 @@ static int optfn_##a(int, int, boolean, char *, char *);
     NHOPTB(herecmd_menu, Advanced, 0, opt_in, set_in_game,
            Off, Yes, No, No, NoAlias, &iflags.herecmd_menu, Term_False,
            "show commands available in this location")
-#if defined(MAC)
+#if defined(MACOS9)
     NHOPTC(hicolor, Advanced, 15, opt_in, set_in_config,
                 No, Yes, No, No, NoAlias,
                 "same as palette, only order is reversed")
@@ -390,7 +394,7 @@ static int optfn_##a(int, int, boolean, char *, char *);
     NHOPTB(idlecheckpoint, Advanced, 0, opt_in, set_in_game,
            Off, Yes, No, No, NoAlias, &iflags.idlecheckpoint, Term_Off,
            "update checkpoint file if input is idle for 10 seconds")
-#ifndef MAC
+#ifndef MACOS9
     NHOPTB(ignintr, Advanced, 0, opt_in, set_in_game,
            Off, Yes, No, No, NoAlias, &flags.ignintr, Term_False,
            "ignore interrupt signals")
@@ -542,7 +546,7 @@ static int optfn_##a(int, int, boolean, char *, char *);
                 No, Yes, No, No, NoAlias,
                 "the inventory order of the items in your pack")
 #ifdef CHANGE_COLOR
-#ifndef MAC     /* not old Mac OS9 */
+#ifndef MACOS9     /* not old Mac OS9 */
     NHOPTC(palette, Advanced, 15, opt_in, set_gameview,
                 No, Yes, Yes, No, "hicolor",
                 "palette (adjust an RGB color in palette (color/R-G-B)")

@@ -1,4 +1,4 @@
-/* NetHack 3.7	consoletty.c	$NHDT-Date: 1596498316 2020/08/03 23:45:16 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.117 $ */
+/* NetHack 5.0	consoletty.c	$NHDT-Date: 1596498316 2020/08/03 23:45:16 $  $NHDT-Branch: NetHack-5.0 $:$NHDT-Revision: 1.117 $ */
 /* Copyright (c) NetHack PC Development Team 1993    */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -2513,10 +2513,10 @@ void nethack_enter_consoletty(void)
     /* setup front and back buffers */
     int buffer_size_bytes = sizeof(cell_t) * console.buffer_size;
 
-    console.front_buffer = (cell_t *)malloc(buffer_size_bytes);
+    console.front_buffer = (cell_t *)alloc(buffer_size_bytes);
     buffer_fill_to_end(console.front_buffer, &undefined_cell, 0, 0);
 
-    console.back_buffer = (cell_t *)malloc(buffer_size_bytes);
+    console.back_buffer = (cell_t *)alloc(buffer_size_bytes);
     buffer_fill_to_end(console.back_buffer, &clear_cell, 0, 0);
 
     /* determine whether OS version has unicode support */

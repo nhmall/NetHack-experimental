@@ -1,4 +1,4 @@
-/* NetHack 3.7	allmain.c	$NHDT-Date: 1771213100 2026/02/15 19:38:20 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.286 $ */
+/* NetHack 5.0	allmain.c	$NHDT-Date: 1771213100 2026/02/15 19:38:20 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.286 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2012. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -120,7 +120,7 @@ u_calc_moveamt(int wtcap)
         /* your speed doesn't augment steed's speed */
         moveamt = mcalcmove(u.usteed, TRUE);
     } else {
-        moveamt = u.umonst->data->mmove;
+        moveamt = gy.youmonst.data->mmove;
 
         if (Very_fast) { /* speed boots, potion, or spell */
             /* gain a free action on 2/3 of turns */
@@ -208,7 +208,6 @@ moveloop_core(void)
             encumber_msg();
 
             svc.context.mon_moving = TRUE;
-            gu.uhp_at_start_of_monster_turn = u.uhp;
             do {
                 monscanmove = movemon();
                 if (u.umovement >= NORMAL_SPEED)
@@ -277,8 +276,6 @@ moveloop_core(void)
                 if (u.ublesscnt)
                     u.ublesscnt--;
 
-                gs.saving_grace_turn = FALSE;
-
                 /* One possible result of prayer is healing.  Whether or
                  * not you get healed depends on your current hit points.
                  * If you are allowed to regenerate during the prayer,
@@ -292,7 +289,7 @@ moveloop_core(void)
                     mvl_wtcap = UNENCUMBERED;
                 } else if (!Upolyd ? (u.uhp < u.uhpmax)
                            : (u.mh < u.mhmax
-                              || u.umonst->data->mlet == S_EEL)) {
+                              || gy.youmonst.data->mlet == S_EEL)) {
                     /* maybe heal */
                     regen_hp(mvl_wtcap);
                 }
@@ -430,8 +427,6 @@ moveloop_core(void)
         else if (!u.umoved)
             (void) pooleffects(FALSE);
 
-        gs.saving_grace_turn = FALSE;
-
         /* vision while buried or underwater is updated here */
         if (Underwater)
             under_water(0);
@@ -483,7 +478,7 @@ moveloop_core(void)
         curs_on_u();
     }
 
-    m_everyturn_effect(u.umonst);
+    m_everyturn_effect(&gy.youmonst);
 
     svc.context.move = 1;
 
@@ -585,6 +580,9 @@ maybe_do_tutorial(void)
         vision_recalc(0);
         docrt();
         iflags.nofollowers = FALSE;
+    } else {
+        /* no tutorial, so okay to process mention_decor now */
+        rcfile_only_this_option(opt_mention_decor);
     }
 }
 
@@ -595,6 +593,9 @@ moveloop(boolean resuming)
 
     if (!resuming)
         maybe_do_tutorial();
+
+    /* process one deferred option post-tutorial */
+    rcfile_only_this_option(opt_mention_decor);
 
     for (;;) {
         moveloop_core();
@@ -636,7 +637,7 @@ regen_hp(int wtcap)
     if (Upolyd) {
         if (u.mh < 1) { /* shouldn't happen... */
             rehumanize();
-        } else if (u.umonst->data->mlet == S_EEL
+        } else if (gy.youmonst.data->mlet == S_EEL
                    && !is_pool(u.ux, u.uy) && !Is_waterlevel(&u.uz)
                    && !Breathless) {
             /* eel out of water loses hp, similar to monster eels;
@@ -742,7 +743,7 @@ init_sound_disp_gamewindows(void)
        ever having been used, use it here to pacify the Qt interface */
     start_menu(WIN_INVEN, menu_behavior), end_menu(WIN_INVEN, (char *) 0);
 
-#ifdef MAC
+#ifdef MACOS9
     /* This _is_ the right place for this - maybe we will
      * have to split init_sound_disp_gamewindows into
      * create_gamewindows and show_gamewindows to get rid of this ifdef...
@@ -775,7 +776,7 @@ newgame(void)
     /* make sure welcome messages are given before noticing monsters */
     notice_mon_off();
     disp.botlx = TRUE;
-    svc.context.ident = 2;  /* id 1 is reserved for u.umonst->m_id */
+    svc.context.ident = 2;  /* id 1 is reserved for gy.youmonst */
     svc.context.warnlevel = 1;
     svc.context.next_attrib_check = 600L; /* arbitrary first setting */
     svc.context.tribute.enabled = TRUE;   /* turn on 3.6 tributes    */

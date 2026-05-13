@@ -1,4 +1,4 @@
-/* NetHack 3.7	objects.h	$NHDT-Date: 1749097644 2025/06/04 20:27:24 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.30 $ */
+/* NetHack 5.0	objects.h	$NHDT-Date: 1749097644 2025/06/04 20:27:24 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.30 $ */
 /* Copyright (c) Mike Threepoint, 1989.                           */
 /* NetHack may be freely redistributed.  See license for details. */
 
@@ -224,7 +224,7 @@ WEAPON("stiletto", NoDes,
 /* 3.6: worm teeth and crysknives now stack;
    when a stack of teeth is enchanted at once, they fuse into one crysknife;
    when a stack of crysknives drops, the whole stack reverts to teeth */
-/* 3.7: change crysknife from MINERAL to BONE and worm tooth from 0 to BONE */
+/* 5.0: change crysknife from MINERAL to BONE and worm tooth from 0 to BONE */
 WEAPON("worm tooth", NoDes,
        1, 1, 0,  0,  20,   2,  2,  2, 0, 0,   P_KNIFE, BONE, CLR_WHITE,
                                                         WORM_TOOTH),
@@ -1453,7 +1453,7 @@ WAND("secret door detection",
                                                     WAN_SECRET_DOOR_DETECTION),
 WAND("enlightenment", "crystal", 15, 150, 1, NODIR, GLASS, HI_GLASS,
                                                     WAN_ENLIGHTENMENT),
-WAND("create monster",  "maple", 45, 200, 1, NODIR, WOOD, HI_WOOD,
+WAND("create monster",  "maple", 50, 200, 1, NODIR, WOOD, HI_WOOD,
                                                     WAN_CREATE_MONSTER),
 WAND("wishing",          "pine",  5, 500, 1, NODIR, WOOD, HI_WOOD,
                                                     WAN_WISHING),
@@ -1477,13 +1477,13 @@ WAND("cancellation", "platinum", 45, 200, 1, IMMEDIATE, PLATINUM, CLR_WHITE,
                                                     WAN_CANCELLATION),
 WAND("teleportation", "iridium", 45, 200, 1, IMMEDIATE, METAL,
                                      CLR_BRIGHT_CYAN, WAN_TELEPORTATION),
-WAND("opening",          "zinc", 25, 150, 1, IMMEDIATE, METAL, HI_METAL,
+WAND("opening",          "zinc", 30, 150, 1, IMMEDIATE, METAL, HI_METAL,
                                                     WAN_OPENING),
-WAND("locking",      "aluminum", 25, 150, 1, IMMEDIATE, METAL, HI_METAL,
+WAND("locking",      "aluminum", 30, 150, 1, IMMEDIATE, METAL, HI_METAL,
                                                     WAN_LOCKING),
 WAND("probing",       "uranium", 30, 150, 1, IMMEDIATE, METAL, HI_METAL,
                                                     WAN_PROBING),
-WAND("digging",          "iron", 55, 150, 1, RAY, IRON, HI_METAL,
+WAND("digging",          "iron", 40, 150, 1, RAY, IRON, HI_METAL,
                                                     WAN_DIGGING),
 /* magic missile ... lightning must be in this order; see buzz() */
 WAND("magic missile",   "steel", 50, 150, 1, RAY, IRON, HI_METAL,

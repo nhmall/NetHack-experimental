@@ -1,4 +1,4 @@
-/* NetHack 3.7	pager.c	$NHDT-Date: 1774846177 2026/03/29 20:49:37 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.296 $ */
+/* NetHack 5.0	pager.c	$NHDT-Date: 1774846177 2026/03/29 20:49:37 $  $NHDT-Branch: NetHack-3.7 $:$NHDT-Revision: 1.296 $ */
 /* Copyright (c) Stichting Mathematisch Centrum, Amsterdam, 1985. */
 /*-Copyright (c) Robert Patrick Rankin, 2018. */
 /* NetHack may be freely redistributed.  See license for details. */
@@ -121,7 +121,7 @@ self_lookat(char *outbuf)
         Sprintf(eos(outbuf), ", mounted on %s", y_monnam(u.usteed));
     if (u.uundetected || (Upolyd && U_AP_TYPE)
         || visible_region_at(u.ux, u.uy))
-        mhidden_description(u.umonst,
+        mhidden_description(&gy.youmonst,
                             MHID_PREFIX | MHID_ARTICLE | MHID_REGION,
                             eos(outbuf));
     if (Punished)
@@ -196,7 +196,7 @@ mhidden_description(
             incl_article = (mhid_flags & MHID_ARTICLE) != 0,
             show_altmon = (mhid_flags & MHID_ALTMON) != 0,
             force_region = (mhid_flags & MHID_REGION) != 0;
-    boolean fakeobj, isyou = (mon == u.umonst);
+    boolean fakeobj, isyou = (mon == &gy.youmonst);
     coordxy x = isyou ? u.ux : mon->mx, y = isyou ? u.uy : mon->my;
     int glyph = (svl.level.flags.hero_memory && !isyou) ? levl[x][y].glyph
                                                        : glyph_at(x, y);
@@ -446,7 +446,7 @@ look_at_monster(
             Strcat(buf, digests(mtmp->data) ? ", swallowing you"
                                             : ", engulfing you");
         else
-            Strcat(buf, (Upolyd && sticks(u.umonst->data))
+            Strcat(buf, (Upolyd && sticks(gy.youmonst.data))
                           ? ", being held" : ", holding you");
     }
     /* if mtmp isn't able to move (other than because it is a type of
@@ -556,7 +556,7 @@ look_at_monster(
 
 /* describe a pool location's contents; might return a static buffer so
    caller should use it or copy it before calling waterbody_name() again
-   [3.7: moved here from mkmaze.c] */
+   [5.0: moved here from mkmaze.c] */
 const char *
 waterbody_name(coordxy x, coordxy y)
 {
@@ -1167,7 +1167,7 @@ add_cmap_descr(
 
         /* grab a scratch buffer we can safely return (via *firstmatch
            when applicable) */
-        mbuf = mon_nam(u.umonst);
+        mbuf = mon_nam(&gy.youmonst);
 
         if (absidx == S_pool) {
             levl[cc.x][cc.y].typ = (idx == S_pool) ? POOL : MOAT;
